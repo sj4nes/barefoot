@@ -14,7 +14,7 @@ impl FileUtils {
         let path = path.as_ref();
         if !path.exists() {
             std::fs::create_dir_all(path)
-                .map_err(|e| crate::error::BarefootError::Io(e))?;
+                .map_err(crate::error::BarefootError::Io)?;
         }
         Ok(())
     }
@@ -30,10 +30,10 @@ impl FileUtils {
             {
                 if entry.file_type().is_dir() {
                     std::fs::remove_dir_all(entry.path())
-                        .map_err(|e| crate::error::BarefootError::Io(e))?;
+                        .map_err(crate::error::BarefootError::Io)?;
                 } else {
                     std::fs::remove_file(entry.path())
-                        .map_err(|e| crate::error::BarefootError::Io(e))?;
+                        .map_err(crate::error::BarefootError::Io)?;
                 }
             }
         }
@@ -43,7 +43,7 @@ impl FileUtils {
     /// Get file size in bytes
     pub fn file_size<P: AsRef<Path>>(path: P) -> Result<u64> {
         let metadata = std::fs::metadata(path)
-            .map_err(|e| crate::error::BarefootError::Io(e))?;
+            .map_err(crate::error::BarefootError::Io)?;
         Ok(metadata.len())
     }
 
@@ -70,7 +70,7 @@ impl ProcessUtils {
     /// Get the current working directory
     pub fn current_dir() -> Result<String> {
         std::env::current_dir()
-            .map_err(|e| crate::error::BarefootError::Io(e))
+            .map_err(crate::error::BarefootError::Io)
             .and_then(|path| {
                 path.to_str()
                     .map(|s| s.to_string())
@@ -173,7 +173,7 @@ impl TimeUtils {
         } else if minutes > 0 {
             format!("{}m {}s", minutes, seconds % 60)
         } else {
-            format!("{}s", seconds)
+            format!("{seconds}s")
         }
     }
 
@@ -189,11 +189,11 @@ impl TimeUtils {
             } else {
                 if let Ok(num) = current_num.parse::<i64>() {
                     match ch {
-                        'h' => duration = duration + chrono::Duration::hours(num),
-                        'm' => duration = duration + chrono::Duration::minutes(num),
-                        's' => duration = duration + chrono::Duration::seconds(num),
+                        'h' => duration += chrono::Duration::hours(num),
+                        'm' => duration += chrono::Duration::minutes(num),
+                        's' => duration += chrono::Duration::seconds(num),
                         _ => return Err(crate::error::BarefootError::Validation(
-                            format!("Invalid duration format: {}", s)
+                            format!("Invalid duration format: {s}")
                         )),
                     }
                 }

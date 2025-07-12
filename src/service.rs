@@ -58,38 +58,38 @@ impl GitHubClient {
 impl ServiceClient for GitHubClient {
     async fn get_jobs(&self) -> Result<Vec<Job>> {
         let response = self.client
-            .get(&format!("{}/actions/runners/jobs", self.base_url))
+            .get(format!("{}/actions/runners/jobs", self.base_url))
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         let jobs: Vec<Job> = response.json()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         Ok(jobs)
     }
     
     async fn update_job_status(&self, job_id: &str, status: &str) -> Result<()> {
         let response = self.client
-            .patch(&format!("{}/actions/jobs/{}", self.base_url, job_id))
+            .patch(format!("{}/actions/jobs/{}", self.base_url, job_id))
             .json(&serde_json::json!({
                 "status": status
             }))
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         Ok(())
@@ -97,17 +97,17 @@ impl ServiceClient for GitHubClient {
     
     async fn send_job_logs(&self, job_id: &str, logs: &str) -> Result<()> {
         let response = self.client
-            .post(&format!("{}/actions/jobs/{}/logs", self.base_url, job_id))
+            .post(format!("{}/actions/jobs/{}/logs", self.base_url, job_id))
             .body(logs.to_string())
             .header("Content-Type", "text/plain")
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         Ok(())
@@ -115,19 +115,19 @@ impl ServiceClient for GitHubClient {
     
     async fn register_runner(&self, capabilities: &RunnerCapabilities) -> Result<()> {
         let response = self.client
-            .post(&format!("{}/actions/runners/registration-token", self.base_url))
+            .post(format!("{}/actions/runners/registration-token", self.base_url))
             .json(&serde_json::json!({
                 "name": "barefoot-runner",
                 "capabilities": capabilities
             }))
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         Ok(())
@@ -135,15 +135,15 @@ impl ServiceClient for GitHubClient {
     
     async fn deregister_runner(&self) -> Result<()> {
         let response = self.client
-            .delete(&format!("{}/actions/runners/self", self.base_url))
+            .delete(format!("{}/actions/runners/self", self.base_url))
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         Ok(())
@@ -184,38 +184,38 @@ impl JujutsuClient {
 impl ServiceClient for JujutsuClient {
     async fn get_jobs(&self) -> Result<Vec<Job>> {
         let response = self.client
-            .get(&format!("{}/jobs", self.base_url))
+            .get(format!("{}/jobs", self.base_url))
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         let jobs: Vec<Job> = response.json()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         Ok(jobs)
     }
     
     async fn update_job_status(&self, job_id: &str, status: &str) -> Result<()> {
         let response = self.client
-            .patch(&format!("{}/jobs/{}", self.base_url, job_id))
+            .patch(format!("{}/jobs/{}", self.base_url, job_id))
             .json(&serde_json::json!({
                 "status": status
             }))
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         Ok(())
@@ -223,17 +223,17 @@ impl ServiceClient for JujutsuClient {
     
     async fn send_job_logs(&self, job_id: &str, logs: &str) -> Result<()> {
         let response = self.client
-            .post(&format!("{}/jobs/{}/logs", self.base_url, job_id))
+            .post(format!("{}/jobs/{}/logs", self.base_url, job_id))
             .body(logs.to_string())
             .header("Content-Type", "text/plain")
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         Ok(())
@@ -241,19 +241,19 @@ impl ServiceClient for JujutsuClient {
     
     async fn register_runner(&self, capabilities: &RunnerCapabilities) -> Result<()> {
         let response = self.client
-            .post(&format!("{}/runners", self.base_url))
+            .post(format!("{}/runners", self.base_url))
             .json(&serde_json::json!({
                 "name": "barefoot-runner",
                 "capabilities": capabilities
             }))
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         Ok(())
@@ -261,15 +261,15 @@ impl ServiceClient for JujutsuClient {
     
     async fn deregister_runner(&self) -> Result<()> {
         let response = self.client
-            .delete(&format!("{}/runners/self", self.base_url))
+            .delete(format!("{}/runners/self", self.base_url))
             .send()
             .await
-            .map_err(|e| BarefootError::HttpRequest(e))?;
+            .map_err(BarefootError::HttpRequest)?;
         
         if !response.status().is_success() {
             return Err(BarefootError::HttpStatus { 
                 status: response.status().as_u16() 
-            }.into());
+            });
         }
         
         Ok(())

@@ -29,7 +29,7 @@ impl RunnerCore {
 
     /// Get the current status
     pub async fn status(&self) -> RunnerStatus {
-        self.status.read().await.clone()
+        *self.status.read().await
     }
 
     /// Set the status

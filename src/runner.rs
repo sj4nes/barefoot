@@ -110,7 +110,7 @@ impl JobExecutor {
     /// Parse workflow from YAML
     pub fn parse_workflow(&self, yaml_content: &str) -> Result<Workflow> {
         serde_yaml::from_str(yaml_content)
-            .map_err(|e| crate::error::BarefootError::Yaml(e))
+            .map_err(crate::error::BarefootError::Yaml)
     }
 
     /// Execute a workflow
@@ -167,16 +167,16 @@ impl WorkflowParser {
     /// Parse workflow from file
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Workflow> {
         let content = std::fs::read_to_string(path)
-            .map_err(|e| crate::error::BarefootError::Io(e))?;
+            .map_err(crate::error::BarefootError::Io)?;
         
         serde_yaml::from_str(&content)
-            .map_err(|e| crate::error::BarefootError::Yaml(e))
+            .map_err(crate::error::BarefootError::Yaml)
     }
 
     /// Parse workflow from string
     pub fn from_string(content: &str) -> Result<Workflow> {
         serde_yaml::from_str(content)
-            .map_err(|e| crate::error::BarefootError::Yaml(e))
+            .map_err(crate::error::BarefootError::Yaml)
     }
 
     /// Validate workflow
@@ -190,7 +190,7 @@ impl WorkflowParser {
         for (job_name, job) in &workflow.jobs {
             if job.steps.is_empty() {
                 return Err(crate::error::BarefootError::Workflow(
-                    format!("Job '{}' must contain at least one step", job_name),
+                    format!("Job '{job_name}' must contain at least one step"),
                 ));
             }
 
