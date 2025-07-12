@@ -1,4 +1,4 @@
-use barefoot::{config::BarefootConfig, core::RunnerCore, runner::JobExecutor, service::ServiceFactory, Result, VERSION};
+use barefoot::{config::BarefootConfig, core::RunnerCore, runner::JobExecutor, service::ServiceClientFactory, Result, VERSION};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing::{error, info, warn};
@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
 
     // Initialize logging
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(format!("barefoot={}", cli.log_level))
+        .with_env_filter(tracing_subscriber::EnvFilter::new(format!("barefoot={}", cli.log_level)))
         .with_target(false)
         .with_thread_ids(true)
         .with_thread_names(true)
@@ -125,7 +125,7 @@ async fn start_runner(config_path: &PathBuf, foreground: bool) -> Result<()> {
     info!("Runner core initialized");
 
     // Create service client
-    let service_client = ServiceFactory::create_client(config.clone())?;
+    let service_client = ServiceClientFactory::create_client(config.clone())?;
     info!("Service client created");
 
     // Register runner with service
@@ -272,7 +272,7 @@ async fn configure_runner(
 
     // Save configuration
     let config_content = toml::to_string_pretty(&config)
-        .map_err(|e| barefoot::error::BarefootError::Serialization(e))?;
+        .map_err(|e| barefoot::error::BarefootError::TomlSerialization(e))?;
     
     std::fs::write(config_path, config_content)
         .map_err(|e| barefoot::error::BarefootError::Io(e))?;
@@ -287,7 +287,7 @@ async fn test_configuration(config_path: &PathBuf) -> Result<()> {
     let config = if config_path.exists() {
         BarefootConfig::from_file(config_path)?
     } else {
-        return Err(barefoot::error::BarefootError::Config(
+        return Err(barefoot::error::BarefootError::Configuration(
             "Configuration file not found".to_string(),
         ));
     };
@@ -297,7 +297,7 @@ async fn test_configuration(config_path: &PathBuf) -> Result<()> {
     info!("Configuration is valid");
 
     // Test service connection
-    let service_client = ServiceFactory::create_client(config.clone())?;
+    let service_client = ServiceClientFactory::create_client(config.clone())?;
     
     match service_client.get_jobs().await {
         Ok(_) => {

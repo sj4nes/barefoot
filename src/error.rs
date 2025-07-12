@@ -13,6 +13,9 @@ pub enum BarefootError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
     
+    #[error("TOML serialization error: {0}")]
+    TomlSerialization(#[from] toml::ser::Error),
+    
     #[error("YAML parsing error: {0}")]
     Yaml(#[from] serde_yaml::Error),
     
@@ -42,6 +45,9 @@ pub enum BarefootError {
     
     #[error("Validation error: {0}")]
     Validation(String),
+    
+    #[error("Anyhow error: {0}")]
+    Anyhow(#[from] anyhow::Error),
 }
 
 /// Result type for the barefoot runner

@@ -1,7 +1,6 @@
-use crate::error::BarefootError;
+use crate::error::{BarefootError, Result};
 use crate::config::BarefootConfig;
 use crate::types::{Job, RunnerCapabilities};
-use anyhow::Result;
 use async_trait::async_trait;
 use reqwest::Client;
 use std::collections::HashMap;
@@ -292,7 +291,7 @@ impl ServiceClientFactory {
             _ => {
                 Err(BarefootError::ServiceNotFound(
                     format!("Service type {:?} not supported", config.service.service_type)
-                ).into())
+                ))
             }
         }
     }

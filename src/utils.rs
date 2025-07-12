@@ -1,4 +1,6 @@
+use crate::types::{JobStep, ExecutionContext, StepResult, Job, Workflow, DiskUsageReport};
 use crate::error::Result;
+use async_trait::async_trait;
 use std::path::Path;
 use walkdir::WalkDir;
 use reqwest::Url;
@@ -201,4 +203,12 @@ impl TimeUtils {
         
         Ok(duration)
     }
+} 
+
+#[async_trait]
+pub trait ContainerBackend: Send + Sync {
+    async fn run_step(&self, step: &JobStep, context: &ExecutionContext) -> Result<StepResult>;
+    async fn prepare_environment(&self, job: &Job, workflow: &Workflow) -> Result<()>;
+    async fn disk_usage(&self) -> Result<DiskUsageReport>;
+    async fn cleanup(&self) -> Result<()>;
 } 

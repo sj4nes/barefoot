@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::types::{RunnerConfig, ServiceConfig, ServiceType, RunnerCapabilities};
+use crate::types::{RunnerConfig, ServiceConfig, ServiceType, RunnerCapabilities, ContainerCleanupConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -45,6 +45,13 @@ impl Default for BarefootConfig {
                 },
                 max_concurrent_jobs: 1,
                 work_dir: "./work".to_string(),
+                container_backend: "native".to_string(),
+                container_backend_opts: None,
+                container_cleanup: ContainerCleanupConfig {
+                    enabled: true,
+                    interval_minutes: 60,
+                    max_usage_bytes: 50_000_000_000, // 50GB
+                },
             },
             service: ServiceConfig {
                 service_type: ServiceType::GitHub,

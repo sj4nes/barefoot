@@ -42,6 +42,36 @@ pub struct RunnerCapabilities {
     pub features: HashMap<String, String>,
 }
 
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct DiskUsageReport {
+    pub total_bytes: u64,
+    pub used_bytes: u64,
+    pub details: Option<String>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct StepResult {
+    pub success: bool,
+    pub exit_code: Option<i32>,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
+    pub duration_ms: Option<u128>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct ExecutionContext {
+    pub work_dir: String,
+    pub env: std::collections::HashMap<String, String>,
+    // Add more as needed
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContainerCleanupConfig {
+    pub enabled: bool,
+    pub interval_minutes: u64,
+    pub max_usage_bytes: u64,
+}
+
 /// Runner configuration
 ///
 /// # Examples
@@ -64,7 +94,7 @@ pub struct RunnerCapabilities {
 /// };
 /// assert_eq!(config.name, "runner");
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunnerConfig {
     pub name: String,
     pub url: String,
@@ -73,6 +103,9 @@ pub struct RunnerConfig {
     pub capabilities: RunnerCapabilities,
     pub max_concurrent_jobs: usize,
     pub work_dir: String,
+    pub container_backend: String, // "docker", "podman", "nix", "native"
+    pub container_backend_opts: Option<std::collections::HashMap<String, String>>,
+    pub container_cleanup: ContainerCleanupConfig,
 }
 
 /// Job status
