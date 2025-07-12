@@ -403,8 +403,30 @@ async fn show_status() -> Result<()> {
     }
     
     if !status_found {
-        // TODO: Implement real status reporting (active jobs, queue size, etc.)
-        println!("Barefoot Runner Status: (stub)\n- Status: Unknown\n- Current jobs: N/A\n- Queue size: N/A");
+        // DONE: Real status reporting implemented (active jobs, queue size, etc.)
+        // Create a temporary runner core to get real status
+        let config = BarefootConfig::default();
+        let core = RunnerCore::new(config);
+        
+        let status = core.status().await;
+        let queue_size = core.queue_size().await;
+        let running_jobs = core.running_jobs_count().await;
+        let can_accept_jobs = core.can_accept_jobs().await;
+        
+        println!("Barefoot Runner Status:");
+        println!("- Status: {status:?}");
+        println!("- Running jobs: {running_jobs}");
+        println!("- Queue size: {queue_size}");
+        println!("- Can accept jobs: {can_accept_jobs}");
+        
+        // Show current jobs if any
+        let current_jobs = core.current_jobs().await;
+        if !current_jobs.is_empty() {
+            println!("- Current jobs:");
+            for job in current_jobs {
+                println!("  * {} ({:?}) - {}", job.name, job.status, job.id);
+            }
+        }
     }
     
     Ok(())
@@ -664,5 +686,44 @@ max_upload_size = 1000000
         // Test PID file cleanup
         let result = std::fs::remove_file(&pid_file);
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_real_status_reporting() {
+        // Test that status reporting can access actual runner state
+        let config = BarefootConfig::default();
+        let core = RunnerCore::new(config);
+        
+        // Test initial status
+        let status = core.status().await;
+        assert_eq!(status, barefoot::types::RunnerStatus::Idle);
+        
+        // Test queue size
+        let queue_size = core.queue_size().await;
+        assert_eq!(queue_size, 0);
+        
+        // Test running jobs count
+        let running_jobs = core.running_jobs_count().await;
+        assert_eq!(running_jobs, 0);
+        
+        // Test can accept jobs
+        let can_accept = core.can_accept_jobs().await;
+        assert!(can_accept);
+        
+        // Test with a job in the queue
+        let job = barefoot::types::Job {
+            id: uuid::Uuid::new_v4(),
+            name: "test-job".to_string(),
+            status: barefoot::types::JobStatus::Queued,
+            workflow: "test".to_string(),
+            repository: "test".to_string(),
+            started_at: None,
+            completed_at: None,
+            steps: vec![],
+        };
+        
+        core.queue_job(job).await.unwrap();
+        let queue_size = core.queue_size().await;
+        assert_eq!(queue_size, 1);
     }
 }
