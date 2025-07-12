@@ -13,6 +13,7 @@ use chrono::{DateTime, Utc};
 /// ```
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum RunnerStatus {
+    #[default]
     Idle,
     Busy,
     Offline,
@@ -84,6 +85,7 @@ pub struct RunnerConfig {
 /// ```
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum JobStatus {
+    #[default]
     Queued,
     Running,
     Completed,
@@ -194,6 +196,7 @@ pub struct ScheduleTrigger {
 /// ```
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum ServiceType {
+    #[default]
     GitHub,
     GitLab,
     Gitea,

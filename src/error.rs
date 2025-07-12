@@ -1,50 +1,45 @@
-use thiserror::Error;
-
 /// Custom error type for the barefoot runner
-#[derive(Error, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum BarefootError {
     #[error("Configuration error: {0}")]
-    Config(String),
-
-    #[error("Network error: {0}")]
-    Network(#[from] reqwest::Error),
-
+    Configuration(String),
+    
+    #[error("HTTP request failed: {0}")]
+    HttpRequest(#[from] reqwest::Error),
+    
+    #[error("HTTP status error: {status}")]
+    HttpStatus { status: u16 },
+    
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-
+    
     #[error("YAML parsing error: {0}")]
     Yaml(#[from] serde_yaml::Error),
-
+    
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-
-    #[error("Process execution error: {0}")]
-    Process(String),
-
-    #[error("Authentication error: {0}")]
-    Auth(String),
-
-    #[error("Invalid workflow: {0}")]
-    Workflow(String),
-
-    #[error("Job execution failed: {0}")]
-    JobExecution(String),
-
-    #[error("Service not found: {0}")]
-    ServiceNotFound(String),
-
+    
     #[error("Invalid state: {0}")]
     InvalidState(String),
-
-    #[error("Timeout: {0}")]
-    Timeout(String),
-
-    #[error("Resource not found: {0}")]
-    NotFound(String),
-
-    #[error("Permission denied: {0}")]
-    PermissionDenied(String),
-
+    
+    #[error("Service not found: {0}")]
+    ServiceNotFound(String),
+    
+    #[error("Too many concurrent jobs")]
+    TooManyJobs,
+    
+    #[error("Job not found: {0}")]
+    JobNotFound(String),
+    
+    #[error("Workflow parsing error: {0}")]
+    WorkflowParse(String),
+    
+    #[error("Workflow error: {0}")]
+    Workflow(String),
+    
+    #[error("Process execution error: {0}")]
+    Process(String),
+    
     #[error("Validation error: {0}")]
     Validation(String),
 }
@@ -58,11 +53,11 @@ mod tests {
 
     #[test]
     fn test_error_conversions() {
-        let config_error = BarefootError::Config("test".to_string());
+        let config_error = BarefootError::Configuration("test".to_string());
         assert_eq!(config_error.to_string(), "Configuration error: test");
 
-        let network_error = BarefootError::Network(reqwest::Error::new(reqwest::StatusCode::INTERNAL_SERVER_ERROR));
-        assert_eq!(network_error.to_string(), "Network error: reqwest::Error { status: 500, url: None, method: None, source: None }");
+        let network_error = BarefootError::HttpRequest(reqwest::Error::new(reqwest::StatusCode::INTERNAL_SERVER_ERROR));
+        assert_eq!(network_error.to_string(), "HTTP request failed: reqwest::Error { status: 500, url: None, method: None, source: None }");
 
         let serialization_error = BarefootError::Serialization(serde_json::Error::new("test"));
         assert_eq!(serialization_error.to_string(), "Serialization error: test");

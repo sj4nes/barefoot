@@ -1,5 +1,5 @@
-use crate::{error::Result, types::*};
-use config::{Config, Environment, File};
+use crate::error::Result;
+use crate::types::{RunnerConfig, ServiceConfig, ServiceType, RunnerCapabilities};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -70,51 +70,51 @@ impl Default for BarefootConfig {
 impl BarefootConfig {
     /// Load configuration from file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let config = Config::builder()
-            .add_source(File::from(path.as_ref()))
-            .add_source(Environment::with_prefix("BAREFOOT"))
+        let config = config::Config::builder()
+            .add_source(config::File::from(path.as_ref()))
+            .add_source(config::Environment::with_prefix("BAREFOOT"))
             .build()
-            .map_err(|e| crate::error::BarefootError::Config(e.to_string()))?;
+            .map_err(|e| crate::error::BarefootError::Configuration(e.to_string()))?;
 
         config
             .try_deserialize()
-            .map_err(|e| crate::error::BarefootError::Config(e.to_string()))
+            .map_err(|e| crate::error::BarefootError::Configuration(e.to_string()))
     }
 
     /// Load configuration from multiple sources
     pub fn from_sources(sources: Vec<&str>) -> Result<Self> {
-        let mut builder = Config::builder();
+        let mut builder = config::Config::builder();
 
         for source in sources {
-            builder = builder.add_source(File::with_name(source));
+            builder = builder.add_source(config::File::with_name(source));
         }
 
         let config = builder
-            .add_source(Environment::with_prefix("BAREFOOT"))
+            .add_source(config::Environment::with_prefix("BAREFOOT"))
             .build()
-            .map_err(|e| crate::error::BarefootError::Config(e.to_string()))?;
+            .map_err(|e| crate::error::BarefootError::Configuration(e.to_string()))?;
 
         config
             .try_deserialize()
-            .map_err(|e| crate::error::BarefootError::Config(e.to_string()))
+            .map_err(|e| crate::error::BarefootError::Configuration(e.to_string()))
     }
 
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
         if self.runner.token.is_empty() {
-            return Err(crate::error::BarefootError::Config(
+            return Err(crate::error::BarefootError::Configuration(
                 "Runner token is required".to_string(),
             ));
         }
 
         if self.service.token.is_empty() {
-            return Err(crate::error::BarefootError::Config(
+            return Err(crate::error::BarefootError::Configuration(
                 "Service token is required".to_string(),
             ));
         }
 
         if self.runner.max_concurrent_jobs == 0 {
-            return Err(crate::error::BarefootError::Config(
+            return Err(crate::error::BarefootError::Configuration(
                 "Max concurrent jobs must be greater than 0".to_string(),
             ));
         }

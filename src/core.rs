@@ -62,18 +62,20 @@ impl RunnerCore {
     pub async fn start_job(&self, mut job: Job) -> Result<()> {
         let mut current_jobs = self.current_jobs.write().await;
         
-        // Check if we can start more jobs
+        // Check if we can accept more jobs
         if current_jobs.len() >= self.config.runner.max_concurrent_jobs {
-            return Err(crate::error::BarefootError::InvalidState(
-                "Maximum concurrent jobs reached".to_string(),
-            ));
+            return Err(crate::error::BarefootError::TooManyJobs);
         }
-
-        job.status = JobStatus::Running;
-        current_jobs.push(job);
         
-        self.set_status(RunnerStatus::Busy).await;
+        // Update job status
+        job.status = JobStatus::Running;
+        job.started_at = Some(chrono::Utc::now());
+        
+        // Add to current jobs
+        current_jobs.push(job.clone());
+        
         tracing::info!("Job started: {}", job.id);
+        
         Ok(())
     }
 

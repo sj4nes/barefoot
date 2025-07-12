@@ -1,7 +1,7 @@
 use crate::{
     core::RunnerCore,
     error::Result,
-    types::{Job, JobStatus, Workflow, WorkflowJob, WorkflowStep},
+    types::{Job, JobStatus, Workflow, WorkflowJob},
 };
 use std::process::Stdio;
 use tokio::process::Command;

@@ -1,6 +1,7 @@
 use crate::error::Result;
 use std::path::Path;
 use walkdir::WalkDir;
+use reqwest::Url;
 
 /// File system utilities
 pub struct FileUtils;
@@ -107,14 +108,14 @@ impl NetworkUtils {
 
     /// Get hostname from URL
     pub fn get_hostname(url: &str) -> Option<String> {
-        url::Url::parse(url)
+        Url::parse(url)
             .ok()
             .and_then(|u| u.host_str().map(|h| h.to_string()))
     }
 
     /// Validate URL format
     pub fn is_valid_url(url: &str) -> bool {
-        url::Url::parse(url).is_ok()
+        Url::parse(url).is_ok()
     }
 }
 
