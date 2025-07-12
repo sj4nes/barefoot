@@ -148,8 +148,8 @@ impl CryptoUtils {
     /// Generate random token
     pub fn random_token() -> String {
         use rand::Rng;
-        let mut rng = rand::thread_rng();
-        let bytes: [u8; 32] = rng.gen();
+        let mut rng = rand::rng();
+        let bytes: [u8; 32] = rng.random();
         hex::encode(bytes)
     }
 }

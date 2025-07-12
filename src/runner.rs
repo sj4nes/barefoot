@@ -44,7 +44,7 @@ impl JobExecutor {
                 Err(e) => {
                     tracing::error!("Step failed: {} - {}", step.name, e);
                     all_logs.push_str(&format!("=== Step: {} FAILED ===\n", step.name));
-                    all_logs.push_str(&format!("Error: {}\n", e));
+                    all_logs.push_str(&format!("Error: {e}\n"));
                     final_status = JobStatus::Failed;
                     
                     // Complete the job with failed status
@@ -68,6 +68,11 @@ impl JobExecutor {
         self.core.complete_job(job.id, final_status).await?;
 
         let duration = Utc::now() - start_time;
+        let duration_ms = duration.num_milliseconds() as u128;
+        
+        // Store job run for differential logging
+        self.core.store_job_run(&job, &all_logs, duration_ms).await;
+        
         tracing::info!(
             "Job completed: {} with status: {:?} (duration: {:?})",
             job.id,
@@ -137,9 +142,9 @@ impl JobExecutor {
             }
             _ => {
                 // DONE: Support additional GitHub Actions and custom actions (setup-node, setup-python, cache, setup-java, setup-go, setup-dotnet, upload-artifact, download-artifact are now supported)
-                return Err(crate::error::BarefootError::Workflow(
+                Err(crate::error::BarefootError::Workflow(
                     format!("Unsupported action: {action_name}")
-                ));
+                ))
             }
         }
     }
@@ -386,14 +391,14 @@ impl JobExecutor {
         // Combine stdout and stderr for logging
         let mut logs = String::new();
         if !stdout.is_empty() {
-            logs.push_str(&format!("STDOUT:\n{}\n", stdout));
+            logs.push_str(&format!("STDOUT:\n{stdout}\n"));
         }
         if !stderr.is_empty() {
-            logs.push_str(&format!("STDERR:\n{}\n", stderr));
+            logs.push_str(&format!("STDERR:\n{stderr}\n"));
         }
 
         if !output.status.success() {
-            return Err(crate::error::BarefootError::Process(format!("Command failed: {}\n{}", command, logs)));
+            return Err(crate::error::BarefootError::Process(format!("Command failed: {command}\n{logs}")));
         }
 
         tracing::debug!("Command output: {}", logs);

@@ -68,6 +68,29 @@ enum Commands {
     /// Show runner status
     Status,
     
+    /// Show differential logs
+    Diff {
+        /// Job name to show differential logs for
+        #[arg(long)]
+        job_name: Option<String>,
+        
+        /// Show all stored job runs
+        #[arg(long)]
+        all: bool,
+        
+        /// Clear all stored job runs
+        #[arg(long)]
+        clear: bool,
+
+        /// Show a sparkline trend of durations
+        #[arg(long)]
+        trend: bool,
+
+        /// Use graphics (Kitty protocol) for sparkline if supported
+        #[arg(long)]
+        trend_graphics: bool,
+    },
+    
     /// Configure the runner
     Config {
         /// Service type (github, gitlab, gitea, jujutsu)
@@ -126,6 +149,9 @@ async fn main() -> Result<()> {
         }
         Commands::Status => {
             show_status().await?;
+        }
+        Commands::Diff { job_name, all, clear, trend, trend_graphics } => {
+            show_differential_logs(&cli.config, job_name, all, clear, trend, trend_graphics).await?;
         }
         Commands::Config { service_type, service_url, service_token, runner_name, runner_token, work_dir } => {
             configure_runner(&cli.config, service_type, service_url, service_token, runner_name, runner_token, work_dir).await?;
@@ -478,6 +504,185 @@ async fn show_status() -> Result<()> {
         }
     }
     
+    Ok(())
+}
+
+async fn show_differential_logs(
+    config_path: &PathBuf,
+    job_name: Option<String>,
+    all: bool,
+    clear: bool,
+    trend: bool,
+    trend_graphics: bool,
+) -> Result<()> {
+    info!("Loading configuration for differential logs");
+    
+    // Load configuration
+    let config = if config_path.exists() {
+        BarefootConfig::from_file(config_path)?
+    } else {
+        warn!("Configuration file not found, using defaults");
+        BarefootConfig::default()
+    };
+
+    // Create runner core
+    let core = RunnerCore::new(config);
+    
+    if clear {
+        core.clear_job_runs().await;
+        println!("Cleared all differential logging records");
+        return Ok(());
+    }
+    
+    if all {
+        let runs = core.get_all_job_runs().await;
+        println!("=== All Stored Job Runs ===");
+        for run in runs {
+            println!("Job: {} (ID: {})", run.job_name, run.job_id);
+            println!("Status: {:?}", run.status);
+            println!("Started: {}", run.started_at);
+            println!("Completed: {}", run.completed_at);
+            println!("Duration: {}ms", run.duration_ms);
+            println!("---");
+        }
+        return Ok(());
+    }
+    
+    if let Some(name) = job_name {
+        if trend {
+            show_job_trend(&core, &name, trend_graphics).await;
+        } else {
+            let diff_logs = core.get_differential_logs(&name).await;
+            println!("{}", diff_logs);
+        }
+    } else {
+        println!("Usage: barefoot diff --job-name <job_name>");
+        println!("       barefoot diff --all");
+        println!("       barefoot diff --clear");
+        println!("       barefoot diff --job-name <job_name> --trend");
+        println!("       barefoot diff --job-name <job_name> --trend --trend-graphics");
+    }
+    
+    Ok(())
+}
+
+/// Show a sparkline trend of job durations
+async fn show_job_trend(core: &RunnerCore, job_name: &str, trend_graphics: bool) {
+    use chrono::{Utc};
+    let runs = core.get_all_job_runs().await;
+    let mut job_runs: Vec<_> = runs.into_iter()
+        .filter(|r| r.job_name == job_name)
+        .collect();
+    if job_runs.is_empty() {
+        println!("No runs found for job '{job_name}'.");
+        return;
+    }
+    // Sort by completed_at ascending
+    job_runs.sort_by_key(|r| r.completed_at);
+    let now = Utc::now();
+    let durations: Vec<u128> = job_runs.iter().map(|r| r.duration_ms).collect();
+    let times: Vec<_> = job_runs.iter().map(|r| r.completed_at).collect();
+    // Stats
+    let min = durations.iter().min().unwrap();
+    let max = durations.iter().max().unwrap();
+    let avg = durations.iter().sum::<u128>() as f64 / durations.len() as f64;
+    // Time markers (approximate)
+    let mut markers = String::new();
+    let first = times.first().unwrap();
+    let last = times.last().unwrap();
+    let _total_span = (*last - *first).num_seconds();
+    let label_points = [0, durations.len() / 2, durations.len() - 1];
+    for (i, t) in times.iter().enumerate() {
+        if label_points.contains(&i) {
+            let ago = now.signed_duration_since(*t);
+            let label = if ago.num_days() > 0 {
+                format!("{}d ago", ago.num_days())
+            } else if ago.num_hours() > 0 {
+                format!("{}h ago", ago.num_hours())
+            } else {
+                "now".to_string()
+            };
+            let pad = if i == 0 { 0 } else { i * 2 };
+            markers.push_str(&format!("{:width$}^ {}", "", label, width=pad));
+        }
+    }
+    println!("Job: {job_name}");
+    println!("Durations (ms): min={min}, max={max}, avg={avg:.1}");
+    if trend_graphics && terminal_supports_kitty_graphics() {
+        // Render PNG sparkline and display using Kitty protocol
+        if let std::result::Result::Err(e) = render_kitty_sparkline(&durations) {
+            println!("[WARN] Could not render Kitty graphics: {e}");
+            // Fallback to unicode
+            let spark = unicode_sparkline(&durations);
+            println!("{spark}");
+            println!("{markers}");
+        }
+    } else {
+        let spark = unicode_sparkline(&durations);
+        println!("{spark}");
+        println!("{markers}");
+    }
+}
+
+/// Render a unicode sparkline for a series of values
+fn unicode_sparkline(values: &[u128]) -> String {
+    // Unicode block chars: ▁▂▃▄▅▆▇█
+    let blocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+    if values.is_empty() {
+        return String::new();
+    }
+    let min = *values.iter().min().unwrap() as f64;
+    let max = *values.iter().max().unwrap() as f64;
+    let _range = (max - min).max(1.0);
+    values.iter().map(|&v| {
+        let idx = (((v as f64 - min) / _range) * 7.0).round() as usize;
+        blocks[idx.min(7)].to_string()
+    }).collect::<Vec<_>>().join("")
+}
+
+/// Detect if the terminal supports Kitty graphics protocol
+fn terminal_supports_kitty_graphics() -> bool {
+    std::env::var("TERM").is_ok_and(|term| {
+        term == "xterm-kitty" || term == "ghostty"
+    })
+}
+
+/// Render a PNG sparkline and display it using the Kitty graphics protocol
+fn render_kitty_sparkline(durations: &[u128]) -> std::result::Result<(), String> {
+    use plotters::prelude::*;
+    const WIDTH: usize = 400;
+    const HEIGHT: usize = 100;
+    if durations.is_empty() {
+        return Err("No durations to plot".to_string());
+    }
+    // Create a fixed-size buffer for the PNG
+    let mut buffer = vec![0u8; WIDTH * HEIGHT * 3]; // RGB, not RGBA
+    {
+        let root = BitMapBackend::with_buffer(&mut buffer, (WIDTH as u32, HEIGHT as u32)).into_drawing_area();
+        root.fill(&WHITE).map_err(|e| format!("Failed to fill background: {}", e))?;
+        let min = *durations.iter().min().unwrap();
+        let max = *durations.iter().max().unwrap();
+        let mut chart = ChartBuilder::on(&root)
+            .margin(5)
+            .x_label_area_size(0)
+            .y_label_area_size(0)
+            .build_cartesian_2d(0..durations.len(), min..max)
+            .map_err(|e| format!("Failed to build chart: {}", e))?;
+        chart.draw_series(LineSeries::new(
+            durations.iter().enumerate().map(|(i, &d)| (i, d)),
+            BLUE.stroke_width(2),
+        )).map_err(|e| format!("Failed to draw line: {}", e))?;
+        chart.draw_series(
+            durations.iter().enumerate().map(|(i, &d)| {
+                Circle::new((i, d), 2, BLUE.filled())
+            })
+        ).map_err(|e| format!("Failed to draw points: {}", e))?;
+        root.present().map_err(|e| format!("Failed to present chart: {}", e))?;
+    } // root is dropped here, releasing the mutable borrow
+    // Encode as base64
+    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &buffer);
+    // Output using Kitty graphics protocol
+    println!("\x1b_Gf=32,s={},v={},a=T,i=1;{}\x1b\\", WIDTH, HEIGHT, base64_data);
     Ok(())
 }
 

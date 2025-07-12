@@ -13,12 +13,20 @@ pub struct BarefootConfig {
     pub security: SecurityConfig,
 }
 
+/// Differential logging configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DifferentialLoggingConfig {
+    pub enabled: bool,
+    pub max_job_runs: usize,
+}
+
 /// Logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LoggingConfig {
     pub level: String,
     pub format: String,
     pub file: Option<String>,
+    pub differential_logging: DifferentialLoggingConfig,
 }
 
 /// Security configuration
@@ -64,6 +72,10 @@ impl Default for BarefootConfig {
                 level: "info".to_string(),
                 format: "json".to_string(),
                 file: None,
+                differential_logging: DifferentialLoggingConfig {
+                    enabled: true,
+                    max_job_runs: 25,
+                },
             },
             security: SecurityConfig {
                 enable_ssl_verification: true,

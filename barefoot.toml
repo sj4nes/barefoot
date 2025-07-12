@@ -28,6 +28,7 @@ custom_headers = {}
 [logging]
 level = "info"
 format = "json"
+differential_logging = { enabled = true, max_job_runs = 25 }
 
 [security]
 enable_ssl_verification = true

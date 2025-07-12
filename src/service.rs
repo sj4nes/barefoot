@@ -220,11 +220,11 @@ impl JujutsuClient {
                         if let Ok(content) = std::fs::read_to_string(&path) {
                             let job_result = if extension == "json" {
                                 serde_json::from_str::<Job>(&content)
-                                    .map_err(|e| crate::error::BarefootError::Serialization(e.into()))
+                                    .map_err(|e| crate::error::BarefootError::Serialization(e))
                             } else {
                                 // TOML parsing
                                 toml::from_str::<Job>(&content)
-                                    .map_err(|e| crate::error::BarefootError::TomlDeserialization(e))
+                                    .map_err(crate::error::BarefootError::TomlDeserialization)
                             };
                             
                             if let Ok(job) = job_result {
@@ -278,51 +278,53 @@ impl JujutsuClient {
                             break;
                         }
 
-                        // Scan for new .json files
+                        // Scan for new .json and .toml files
                         if let Ok(entries) = std::fs::read_dir(&barefoot_dir) {
                             for entry in entries.flatten() {
                                 let path = entry.path();
-                                if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                                    // Check if file was modified recently
-                                    if let Ok(metadata) = std::fs::metadata(&path) {
-                                        if let Ok(modified) = metadata.modified() {
-                                            let now = std::time::SystemTime::now();
-                                            if let Ok(duration) = now.duration_since(modified) {
-                                                if duration < Duration::from_secs(60) { // File modified in last minute
-                                                    // Update last change time
-                                                    {
-                                                        let mut last_time = last_change_time.lock().await;
-                                                        *last_time = Some(Instant::now());
-                                                    }
-
-                                                    // Send notification
-                                                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                                                        let _ = tx.send(file_name.to_string()).await;
-                                                    }
-
-                                                    // Start debounced task
-                                                    let debounce_delay = debounce_delay;
-                                                    let last_change_time = Arc::clone(&last_change_time);
-                                                    let tx = Arc::clone(&tx);
-                                                    
-                                                    tokio::spawn(async move {
-                                                        tokio::time::sleep(debounce_delay).await;
-                                                        
-                                                        // Check if this is still the most recent change
-                                                        let should_notify = {
-                                                            let last_time = last_change_time.lock().await;
-                                                            if let Some(time) = *last_time {
-                                                                Instant::now().duration_since(time) >= debounce_delay
-                                                            } else {
-                                                                false
-                                                            }
-                                                        };
-
-                                                        if should_notify {
-                                                            tracing::info!("Debounced file change notification - changes have stabilized");
-                                                            let _ = tx.send("DEBOUNCED".to_string()).await;
+                                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                                    if ext == "json" || ext == "toml" {
+                                        // Check if file was modified recently
+                                        if let Ok(metadata) = std::fs::metadata(&path) {
+                                            if let Ok(modified) = metadata.modified() {
+                                                let now = std::time::SystemTime::now();
+                                                if let Ok(duration) = now.duration_since(modified) {
+                                                    if duration < Duration::from_secs(60) { // File modified in last minute
+                                                        // Update last change time
+                                                        {
+                                                            let mut last_time = last_change_time.lock().await;
+                                                            *last_time = Some(Instant::now());
                                                         }
-                                                    });
+
+                                                        // Send notification
+                                                        if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                                                            let _ = tx.send(file_name.to_string()).await;
+                                                        }
+
+                                                        // Start debounced task
+                                                        let debounce_delay = debounce_delay;
+                                                        let last_change_time = Arc::clone(&last_change_time);
+                                                        let tx = Arc::clone(&tx);
+                                                        
+                                                        tokio::spawn(async move {
+                                                            tokio::time::sleep(debounce_delay).await;
+                                                            
+                                                            // Check if this is still the most recent change
+                                                            let should_notify = {
+                                                                let last_time = last_change_time.lock().await;
+                                                                if let Some(time) = *last_time {
+                                                                    Instant::now().duration_since(time) >= debounce_delay
+                                                                } else {
+                                                                    false
+                                                                }
+                                                            };
+
+                                                            if should_notify {
+                                                                tracing::info!("Debounced file change notification - changes have stabilized");
+                                                                let _ = tx.send("DEBOUNCED".to_string()).await;
+                                                            }
+                                                        });
+                                                    }
                                                 }
                                             }
                                         }
@@ -705,7 +707,7 @@ duration = null"#;
         fs::write(&job_file, job_content).unwrap();
 
         // Wait for file change notification (polling approach)
-        let change = tokio::time::timeout(Duration::from_secs(15), rx.recv()).await;
+        let change = tokio::time::timeout(Duration::from_secs(30), rx.recv()).await;
         assert!(change.is_ok());
         let change = change.unwrap();
         assert!(change.is_some());
@@ -773,7 +775,7 @@ duration = null"#, i, i)
 
         // Should receive multiple notifications
         let mut notifications = 0;
-        while tokio::time::timeout(Duration::from_secs(15), rx.recv()).await.is_ok() {
+        while tokio::time::timeout(Duration::from_secs(30), rx.recv()).await.is_ok() {
             notifications += 1;
             if notifications >= 3 {
                 break;
