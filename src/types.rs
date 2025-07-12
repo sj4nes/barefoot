@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
@@ -18,6 +19,17 @@ pub enum RunnerStatus {
     Busy,
     Offline,
     Maintenance,
+}
+
+impl fmt::Display for RunnerStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RunnerStatus::Idle => write!(f, "Idle"),
+            RunnerStatus::Busy => write!(f, "Busy"),
+            RunnerStatus::Offline => write!(f, "Offline"),
+            RunnerStatus::Maintenance => write!(f, "Maintenance"),
+        }
+    }
 }
 
 /// Runner capabilities

@@ -553,7 +553,7 @@ async fn show_differential_logs(
             show_job_trend(&core, &name, trend_graphics).await;
         } else {
             let diff_logs = core.get_differential_logs(&name).await;
-            println!("{}", diff_logs);
+            println!("{diff_logs}");
         }
     } else {
         println!("Usage: barefoot diff --job-name <job_name>");
@@ -659,7 +659,7 @@ fn render_kitty_sparkline(durations: &[u128]) -> std::result::Result<(), String>
     let mut buffer = vec![0u8; WIDTH * HEIGHT * 3]; // RGB, not RGBA
     {
         let root = BitMapBackend::with_buffer(&mut buffer, (WIDTH as u32, HEIGHT as u32)).into_drawing_area();
-        root.fill(&WHITE).map_err(|e| format!("Failed to fill background: {}", e))?;
+        root.fill(&WHITE).map_err(|e| format!("Failed to fill background: {e}"))?;
         let min = *durations.iter().min().unwrap();
         let max = *durations.iter().max().unwrap();
         let mut chart = ChartBuilder::on(&root)
@@ -667,22 +667,22 @@ fn render_kitty_sparkline(durations: &[u128]) -> std::result::Result<(), String>
             .x_label_area_size(0)
             .y_label_area_size(0)
             .build_cartesian_2d(0..durations.len(), min..max)
-            .map_err(|e| format!("Failed to build chart: {}", e))?;
+            .map_err(|e| format!("Failed to build chart: {e}"))?;
         chart.draw_series(LineSeries::new(
             durations.iter().enumerate().map(|(i, &d)| (i, d)),
             BLUE.stroke_width(2),
-        )).map_err(|e| format!("Failed to draw line: {}", e))?;
+        )).map_err(|e| format!("Failed to draw line: {e}"))?;
         chart.draw_series(
             durations.iter().enumerate().map(|(i, &d)| {
                 Circle::new((i, d), 2, BLUE.filled())
             })
-        ).map_err(|e| format!("Failed to draw points: {}", e))?;
-        root.present().map_err(|e| format!("Failed to present chart: {}", e))?;
+        ).map_err(|e| format!("Failed to draw points: {e}"))?;
+        root.present().map_err(|e| format!("Failed to present chart: {e}"))?;
     } // root is dropped here, releasing the mutable borrow
     // Encode as base64
     let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &buffer);
     // Output using Kitty graphics protocol
-    println!("\x1b_Gf=32,s={},v={},a=T,i=1;{}\x1b\\", WIDTH, HEIGHT, base64_data);
+    println!("\x1b_Gf=32,s={WIDTH},v={HEIGHT},a=T,i=1;{base64_data}\x1b\\");
     Ok(())
 }
 

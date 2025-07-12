@@ -39,7 +39,7 @@ impl JobExecutor {
                     tracing::info!("Step completed: {}", step.name);
                     all_logs.push_str(&format!("=== Step: {} ===\n", step.name));
                     all_logs.push_str(&logs);
-                    all_logs.push_str("\n");
+                    all_logs.push('\n');
                 }
                 Err(e) => {
                     tracing::error!("Step failed: {} - {}", step.name, e);

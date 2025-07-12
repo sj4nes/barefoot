@@ -220,7 +220,7 @@ impl JujutsuClient {
                         if let Ok(content) = std::fs::read_to_string(&path) {
                             let job_result = if extension == "json" {
                                 serde_json::from_str::<Job>(&content)
-                                    .map_err(|e| crate::error::BarefootError::Serialization(e))
+                                    .map_err(crate::error::BarefootError::Serialization)
                             } else {
                                 // TOML parsing
                                 toml::from_str::<Job>(&content)
@@ -497,6 +497,7 @@ impl ServiceClient for JujutsuClient {
 }
 
 /// Service client factory
+#[derive(Clone)]
 pub struct ServiceClientFactory;
 
 impl ServiceClientFactory {
@@ -612,7 +613,7 @@ run = "echo 'hello'""#;
         fs::write(&job_file, job_content).unwrap();
 
         // Try parsing the TOML directly
-        match toml::from_str::<crate::types::Job>(&job_content) {
+        match toml::from_str::<crate::types::Job>(job_content) {
             Ok(_) => println!("TOML parsed successfully"),
             Err(e) => println!("Direct TOML parse error: {e}"),
         }
@@ -744,18 +745,18 @@ duration = null"#;
             
             let job_content = if extension == "json" {
                 format!(r#"{{
-                    "id": "550e8400-e29b-41d4-a716-446655440{:03}",
-                    "name": "Job {}",
+                    "id": "550e8400-e29b-41d4-a716-446655440{i:03}",
+                    "name": "Job {i}",
                     "status": "Queued",
                     "workflow": "test-workflow",
                     "repository": "test-repo",
                     "started_at": null,
                     "completed_at": null,
                     "steps": []
-                }}"#, i, i)
+                }}"#)
             } else {
-                format!(r#"id = "550e8400-e29b-41d4-a716-446655440{:03}"
-name = "Job {}"
+                format!(r#"id = "550e8400-e29b-41d4-a716-446655440{i:03}"
+name = "Job {i}"
 status = "Queued"
 workflow = "test-workflow"
 repository = "test-repo"
@@ -767,7 +768,7 @@ name = "test-step"
 status = "Queued"
 run = "echo 'hello'"
 uses = null
-duration = null"#, i, i)
+duration = null"#)
             };
             
             fs::write(&job_file, job_content).unwrap();

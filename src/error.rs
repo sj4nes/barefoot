@@ -49,6 +49,9 @@ pub enum BarefootError {
     #[error("Validation error: {0}")]
     Validation(String),
     
+    #[error("MCP error: {0}")]
+    Mcp(String),
+    
     #[error("Anyhow error: {0}")]
     Anyhow(#[from] anyhow::Error),
 }

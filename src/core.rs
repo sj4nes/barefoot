@@ -73,7 +73,7 @@ impl DifferentialLogger {
             }
         } else {
             // No runs found
-            format!("=== No previous runs found for job '{}' ===", job_name)
+            format!("=== No previous runs found for job '{job_name}' ===")
         }
     }
 
@@ -243,6 +243,11 @@ impl RunnerCore {
     pub async fn queue_size(&self) -> usize {
         self.job_queue.read().await.len()
     }
+    
+    /// Get job queue
+    pub async fn job_queue(&self) -> Vec<Job> {
+        self.job_queue.read().await.clone()
+    }
 
     /// Get running jobs count
     pub async fn running_jobs_count(&self) -> usize {
@@ -332,9 +337,9 @@ mod tests {
         for i in 0..4 {
             let record = JobRunRecord {
                 job_id: Uuid::new_v4(),
-                job_name: format!("test-job-{}", i),
+                job_name: format!("test-job-{i}"),
                 status: JobStatus::Completed,
-                logs: format!("test logs {}", i),
+                logs: format!("test logs {i}"),
                 started_at: Utc::now(),
                 completed_at: Utc::now(),
                 duration_ms: 1000,
