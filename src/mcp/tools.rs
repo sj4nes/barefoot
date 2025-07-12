@@ -6,7 +6,7 @@
 // TODO: Add MCP tool for sparkline and cycle time analytics (minutes/hours/days, avg/p99/last)
 
 use super::*;
-use crate::{core::RunnerCore, runner::JobExecutor, types::Job};
+use crate::core::RunnerCore;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::Utc;
@@ -109,21 +109,70 @@ impl StartJobTool {
         let job_id = args["job_id"].as_str().unwrap();
         let priority = args.get("priority").and_then(|p| p.as_u64()).unwrap_or(5);
         
-        // TODO: Implement actual job start logic
-        let content = serde_json::json!({
-            "success": true,
-            "job_id": job_id,
-            "priority": priority,
-            "message": "Job start initiated",
-            "timestamp": Utc::now().to_rfc3339(),
-        });
+        // Parse job ID
+        let job_uuid = uuid::Uuid::parse_str(job_id)
+            .map_err(|_| BarefootError::Mcp("Invalid job ID format".to_string()))?;
         
-        Ok(ToolResult {
-            success: true,
-            content,
-            error: None,
-            duration: None,
-        })
+        let runner_core = self.runner_core.read().await;
+        
+        // Check if runner can accept jobs
+        if !runner_core.can_accept_jobs().await {
+            return Ok(ToolResult {
+                success: false,
+                content: serde_json::json!({
+                    "error": "Runner cannot accept more jobs",
+                    "job_id": job_id,
+                    "priority": priority,
+                }),
+                error: Some("Runner cannot accept more jobs".to_string()),
+                duration: None,
+            });
+        }
+        
+        // Create a mock job for demonstration
+        let job = crate::types::Job {
+            id: job_uuid,
+            name: format!("job-{}", job_id),
+            status: crate::types::JobStatus::Queued,
+            workflow: "mcp-triggered".to_string(),
+            repository: "mcp".to_string(),
+            started_at: None,
+            completed_at: None,
+            steps: vec![],
+        };
+        
+        // Queue the job
+        match runner_core.queue_job(job.clone()).await {
+            Ok(_) => {
+                let content = serde_json::json!({
+                    "success": true,
+                    "job_id": job_id,
+                    "priority": priority,
+                    "message": "Job queued successfully",
+                    "queue_size": runner_core.queue_size().await,
+                    "timestamp": Utc::now().to_rfc3339(),
+                });
+                
+                Ok(ToolResult {
+                    success: true,
+                    content,
+                    error: None,
+                    duration: None,
+                })
+            }
+            Err(e) => {
+                Ok(ToolResult {
+                    success: false,
+                    content: serde_json::json!({
+                        "error": e.to_string(),
+                        "job_id": job_id,
+                        "priority": priority,
+                    }),
+                    error: Some(e.to_string()),
+                    duration: None,
+                })
+            }
+        }
     }
 }
 
@@ -176,21 +225,67 @@ impl StopJobTool {
         let job_id = args["job_id"].as_str().unwrap();
         let force = args.get("force").and_then(|f| f.as_bool()).unwrap_or(false);
         
-        // TODO: Implement actual job stop logic
-        let content = serde_json::json!({
-            "success": true,
-            "job_id": job_id,
-            "force": force,
-            "message": "Job stop initiated",
-            "timestamp": Utc::now().to_rfc3339(),
-        });
+        // Parse job ID
+        let job_uuid = uuid::Uuid::parse_str(job_id)
+            .map_err(|_| BarefootError::Mcp("Invalid job ID format".to_string()))?;
         
-        Ok(ToolResult {
-            success: true,
-            content,
-            error: None,
-            duration: None,
-        })
+        let runner_core = self.runner_core.read().await;
+        let current_jobs = runner_core.current_jobs().await;
+        
+        // Check if job is currently running
+        let job_found = current_jobs.iter().find(|j| j.id == job_uuid);
+        
+        if let Some(_job) = job_found {
+            // Complete the job with cancelled status
+            match runner_core.complete_job(job_uuid, crate::types::JobStatus::Cancelled).await {
+                Ok(_) => {
+                    let content = serde_json::json!({
+                        "success": true,
+                        "job_id": job_id,
+                        "force": force,
+                        "message": "Job stopped successfully",
+                        "job_status": "cancelled",
+                        "timestamp": Utc::now().to_rfc3339(),
+                    });
+                    
+                    Ok(ToolResult {
+                        success: true,
+                        content,
+                        error: None,
+                        duration: None,
+                    })
+                }
+                Err(e) => {
+                    Ok(ToolResult {
+                        success: false,
+                        content: serde_json::json!({
+                            "error": e.to_string(),
+                            "job_id": job_id,
+                            "force": force,
+                        }),
+                        error: Some(e.to_string()),
+                        duration: None,
+                    })
+                }
+            }
+        } else {
+            // Job not found or not running
+            let content = serde_json::json!({
+                "success": false,
+                "job_id": job_id,
+                "force": force,
+                "message": "Job not found or not running",
+                "available_jobs": current_jobs.iter().map(|j| j.id.to_string()).collect::<Vec<_>>(),
+                "timestamp": Utc::now().to_rfc3339(),
+            });
+            
+            Ok(ToolResult {
+                success: false,
+                content,
+                error: Some("Job not found or not running".to_string()),
+                duration: None,
+            })
+        }
     }
 }
 
@@ -356,33 +451,23 @@ mod tests {
     #[tokio::test]
     async fn test_start_job_tool() {
         let runner_core = Arc::new(RwLock::new(RunnerCore::new(BarefootConfig::default())));
-        let start_tool = StartJobTool::new(runner_core.clone());
-        
-        let args = serde_json::json!({
-            "job_id": "test-job-123",
-            "priority": 5
-        });
-        
-        let result = start_tool.execute(args).await.unwrap();
+        let tool = StartJobTool::new(runner_core);
+        let valid_uuid = uuid::Uuid::new_v4().to_string();
+        let args = serde_json::json!({"job_id": valid_uuid, "priority": 5});
+        let result = tool.execute(args).await.unwrap();
         assert!(result.success);
-        assert!(result.content.is_object());
     }
-    
+
     #[tokio::test]
     async fn test_stop_job_tool() {
         let runner_core = Arc::new(RwLock::new(RunnerCore::new(BarefootConfig::default())));
-        let stop_tool = StopJobTool::new(runner_core.clone());
-        
-        let args = serde_json::json!({
-            "job_id": "test-job-123",
-            "force": true
-        });
-        
-        let result = stop_tool.execute(args).await.unwrap();
-        assert!(result.success);
-        assert!(result.content.is_object());
+        let tool = StopJobTool::new(runner_core);
+        let valid_uuid = uuid::Uuid::new_v4().to_string();
+        let args = serde_json::json!({"job_id": valid_uuid, "force": true});
+        let result = tool.execute(args).await.unwrap();
+        assert!(!result.success); // Job won't be found, but should not panic
     }
-    
+
     #[tokio::test]
     async fn test_health_check_tool() {
         let runner_core = Arc::new(RwLock::new(RunnerCore::new(BarefootConfig::default())));
@@ -399,19 +484,13 @@ mod tests {
     
     #[tokio::test]
     async fn test_tool_manager() {
-        let mut manager = ToolManager::new();
         let runner_core = Arc::new(RwLock::new(RunnerCore::new(BarefootConfig::default())));
-        
-        let start_tool = AsyncToolHandler::StartJob(StartJobTool::new(runner_core.clone()));
-        manager.register_async_tool(start_tool);
-        
-        assert!(manager.has_tool("start_job"));
-        
-        let args = serde_json::json!({
-            "job_id": "test-job-123"
-        });
-        
-        let result = manager.execute_tool("start_job", args).await.unwrap();
+        let mut manager = ToolManager::new();
+        manager.register_async_tool(AsyncToolHandler::StartJob(StartJobTool::new(runner_core.clone())));
+        manager.register_async_tool(AsyncToolHandler::StopJob(StopJobTool::new(runner_core.clone())));
+        manager.register_async_tool(AsyncToolHandler::HealthCheck(HealthCheckTool::new(runner_core.clone())));
+        let valid_uuid = uuid::Uuid::new_v4().to_string();
+        let result = manager.execute_tool("start_job", serde_json::json!({"job_id": valid_uuid, "priority": 5})).await.unwrap();
         assert!(result.success);
     }
 } 

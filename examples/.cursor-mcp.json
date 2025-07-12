@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "barefoot-runner": {
+      "command": "barefoot",
+      "args": ["mcp", "--transport", "stdio"],
+      "env": {}
+    }
+  }
+} 

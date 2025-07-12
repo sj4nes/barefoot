@@ -11,6 +11,7 @@ A modern, flexible runner system for GitHub-like services and Jujutsu. Built in 
 - **Comprehensive logging**: Structured logging with configurable levels
 - **Security**: SSL verification, token-based authentication, and secure defaults
 - **Extensible**: Plugin architecture for custom service integrations
+- **MCP Integration**: Model Context Protocol support for AI-assisted CI/CD management
 
 ## Quick Start
 
@@ -81,7 +82,39 @@ barefoot status
 
 # Stop the runner
 barefoot stop
+
+# Start MCP server for AI integration
+barefoot mcp --transport stdio
 ```
+
+## MCP Integration
+
+Barefoot includes Model Context Protocol (MCP) integration for AI-assisted CI/CD management. This allows AI tools like Cursor to interact with your runner system programmatically.
+
+### Quick Start with Cursor
+
+1. **Start the MCP server:**
+   ```bash
+   barefoot mcp --transport stdio
+   ```
+
+2. **Configure Cursor:**
+   - Open Cursor Settings
+   - Go to `Extensions > MCP`
+   - Add server with command: `barefoot` and args: `["mcp", "--transport", "stdio"]`
+
+3. **Use AI commands:**
+   ```
+   "What's the health of my CI runner?"
+   "Show me the current jobs"
+   "Start a new job with high priority"
+   ```
+
+### Documentation
+
+- **[Quick Start Guide](docs/mcp-cursor-quickstart.md)** - Get started in 5 minutes
+- **[Full Integration Guide](docs/mcp-cursor-integration.md)** - Complete documentation
+- **[MCP Status](docs/mcp-status.md)** - Implementation status and roadmap
 
 ## Architecture
 

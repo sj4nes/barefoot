@@ -1,21 +1,19 @@
 //! MCP transport implementations for barefoot runner
 
 use super::*;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-use futures::StreamExt;
+use tokio::io::AsyncWriteExt;
 use serde_json::Value;
 use crate::error::Result;
+use std::pin::Pin;
 
 /// Transport trait for MCP communication
 pub trait Transport: Send + Sync {
     /// Start the transport
-    async fn start(&mut self) -> Result<()>;
+    fn start(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>>;
     
     /// Stop the transport
-    async fn stop(&mut self) -> Result<()>;
+    fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>>;
     
     /// Check if transport is running
     fn is_running(&self) -> bool;
@@ -45,21 +43,25 @@ impl StdioTransport {
 }
 
 impl Transport for StdioTransport {
-    async fn start(&mut self) -> Result<()> {
-        self.running = true;
-        tracing::info!("MCP stdio transport started");
-        
-        // TODO: Implement stdio-based MCP protocol
-        // This would involve reading from stdin and writing to stdout
-        // following the MCP protocol specification
-        
-        Ok(())
+    fn start(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            self.running = true;
+            tracing::info!("MCP stdio transport started");
+            
+            // TODO: Implement stdio-based MCP protocol
+            // This would involve reading from stdin and writing to stdout
+            // following the MCP protocol specification
+            
+            Ok(())
+        })
     }
     
-    async fn stop(&mut self) -> Result<()> {
-        self.running = false;
-        tracing::info!("MCP stdio transport stopped");
-        Ok(())
+    fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            self.running = false;
+            tracing::info!("MCP stdio transport stopped");
+            Ok(())
+        })
     }
     
     fn is_running(&self) -> bool {
@@ -97,7 +99,7 @@ impl TcpTransport {
     }
     
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
-        let (mut read, mut write) = stream.into_split();
+        let (_read, mut write) = stream.into_split();
         
         // TODO: Implement MCP protocol over TCP
         // This would involve parsing JSON-RPC messages and handling MCP requests
@@ -112,27 +114,33 @@ impl TcpTransport {
 }
 
 impl Transport for TcpTransport {
-    async fn start(&mut self) -> Result<()> {
-        if self.running {
-            return Ok(());
-        }
-        
-        let listener = TcpListener::bind(format!("{}:{}", self.host, self.port)).await
-            .map_err(|e| BarefootError::Mcp(format!("Failed to bind to {}:{}: {}", self.host, self.port, e)))?;
-        
-        self.running = true;
-        self.listener = Some(listener);
-        
-        tracing::info!("MCP TCP transport started on {}:{}", self.host, self.port);
-        
-        Ok(())
+    fn start(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        let host = self.host.clone();
+        let port = self.port;
+        Box::pin(async move {
+            if self.running {
+                return Ok(());
+            }
+            
+            let listener = TcpListener::bind(format!("{}:{}", host, port)).await
+                .map_err(|e| BarefootError::Mcp(format!("Failed to bind to {}:{}: {}", host, port, e)))?;
+            
+            self.running = true;
+            self.listener = Some(listener);
+            
+            tracing::info!("MCP TCP transport started on {}:{}", host, port);
+            
+            Ok(())
+        })
     }
     
-    async fn stop(&mut self) -> Result<()> {
-        self.running = false;
-        self.listener = None;
-        tracing::info!("MCP TCP transport stopped");
-        Ok(())
+    fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            self.running = false;
+            self.listener = None;
+            tracing::info!("MCP TCP transport stopped");
+            Ok(())
+        })
     }
     
     fn is_running(&self) -> bool {
@@ -169,20 +177,26 @@ impl WebSocketTransport {
 }
 
 impl Transport for WebSocketTransport {
-    async fn start(&mut self) -> Result<()> {
-        self.running = true;
-        tracing::info!("MCP WebSocket transport started on {}:{}", self.host, self.port);
-        
-        // TODO: Implement WebSocket-based MCP protocol
-        // This would involve using a WebSocket library like tokio-tungstenite
-        
-        Ok(())
+    fn start(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        let host = self.host.clone();
+        let port = self.port;
+        Box::pin(async move {
+            self.running = true;
+            tracing::info!("MCP WebSocket transport started on {}:{}", host, port);
+            
+            // TODO: Implement WebSocket-based MCP protocol
+            // This would involve using a WebSocket library like tokio-tungstenite
+            
+            Ok(())
+        })
     }
     
-    async fn stop(&mut self) -> Result<()> {
-        self.running = false;
-        tracing::info!("MCP WebSocket transport stopped");
-        Ok(())
+    fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            self.running = false;
+            tracing::info!("MCP WebSocket transport stopped");
+            Ok(())
+        })
     }
     
     fn is_running(&self) -> bool {
@@ -225,19 +239,19 @@ pub enum TransportEnum {
 }
 
 impl Transport for TransportEnum {
-    async fn start(&mut self) -> Result<()> {
+    fn start(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
         match self {
-            TransportEnum::Stdio(transport) => transport.start().await,
-            TransportEnum::Tcp(transport) => transport.start().await,
-            TransportEnum::WebSocket(transport) => transport.start().await,
+            TransportEnum::Stdio(transport) => transport.start(),
+            TransportEnum::Tcp(transport) => transport.start(),
+            TransportEnum::WebSocket(transport) => transport.start(),
         }
     }
     
-    async fn stop(&mut self) -> Result<()> {
+    fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
         match self {
-            TransportEnum::Stdio(transport) => transport.stop().await,
-            TransportEnum::Tcp(transport) => transport.stop().await,
-            TransportEnum::WebSocket(transport) => transport.stop().await,
+            TransportEnum::Stdio(transport) => transport.stop(),
+            TransportEnum::Tcp(transport) => transport.stop(),
+            TransportEnum::WebSocket(transport) => transport.stop(),
         }
     }
     
@@ -419,15 +433,22 @@ mod tests {
     
     #[tokio::test]
     async fn test_stdio_transport() {
+        use futures::pin_mut;
         let mut transport = StdioTransport::new();
         assert!(!transport.is_running());
-        
-        let result = transport.start().await;
-        assert!(result.is_ok());
+        {
+            let fut = transport.start();
+            pin_mut!(fut);
+            let result = fut.await;
+            assert!(result.is_ok());
+        }
         assert!(transport.is_running());
-        
-        let result = transport.stop().await;
-        assert!(result.is_ok());
+        {
+            let fut = transport.stop();
+            pin_mut!(fut);
+            let result = fut.await;
+            assert!(result.is_ok());
+        }
         assert!(!transport.is_running());
     }
     

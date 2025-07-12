@@ -98,13 +98,13 @@ impl BarefootMcpServer {
     }
     
     /// Increment connection count
-    async fn increment_connections(&self) {
+    pub async fn increment_connections(&self) {
         let mut connections = self.connections.write().await;
         *connections += 1;
     }
     
     /// Decrement connection count
-    async fn decrement_connections(&self) {
+    pub async fn decrement_connections(&self) {
         let mut connections = self.connections.write().await;
         if *connections > 0 {
             *connections -= 1;

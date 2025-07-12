@@ -1,0 +1,60 @@
+# Example MCP configuration for barefoot
+# Copy this to your project and customize as needed
+
+[runner]
+name = "mcp-runner"
+url = "http://localhost:8080"
+token = "your-runner-token"
+labels = ["self-hosted", "mcp-enabled"]
+max_concurrent_jobs = 4
+work_dir = "./work"
+
+[runner.capabilities]
+os = "linux"
+architecture = "x86_64"
+labels = ["self-hosted", "mcp-enabled"]
+features = { "docker" = "true", "gpu" = "false", "mcp" = "true" }
+
+[service]
+service_type = "GitHub"
+url = "https://api.github.com"
+token = "your-service-token"
+api_version = "2022-11-28"
+
+[logging]
+level = "info"
+format = "json"
+file = null
+
+[logging.differential_logging]
+enabled = true
+max_job_runs = 100
+
+[security]
+enable_ssl_verification = true
+allowed_origins = ["*"]
+max_upload_size = 104857600
+
+# MCP-specific configuration
+[mcp]
+transport = "stdio"  # stdio, tcp, websocket
+auth_enabled = false
+max_connections = 10
+request_timeout = 30
+rate_limit = 100
+
+[mcp.features]
+streaming = true
+realtime = true
+sampling = false
+prompts = true
+
+# For TCP transport
+# [mcp.tcp]
+# host = "127.0.0.1"
+# port = 8080
+
+# For WebSocket transport  
+# [mcp.websocket]
+# host = "127.0.0.1"
+# port = 8081 

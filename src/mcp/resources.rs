@@ -6,7 +6,7 @@
 // TODO: Add MCP resource for sparkline and cycle time analytics (minutes/hours/days, avg/p99/last)
 
 use super::*;
-use crate::{core::RunnerCore, types::Job, service::ServiceClientFactory};
+use crate::core::RunnerCore;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::Utc;
@@ -229,12 +229,38 @@ impl JobHistoryResource {
     }
     
     pub async fn get_content(&self) -> Result<ResourceContent> {
-        // TODO: Implement job history retrieval from differential logger
+        let runner_core = self.runner_core.read().await;
+        let job_runs = runner_core.get_all_job_runs().await;
+        
+        let total_jobs = job_runs.len();
+        let successful_jobs = job_runs.iter().filter(|run| run.status == crate::types::JobStatus::Completed).count();
+        let success_rate = if total_jobs > 0 {
+            (successful_jobs as f64 / total_jobs as f64) * 100.0
+        } else {
+            0.0
+        };
+        
+        let average_duration = if total_jobs > 0 {
+            let total_duration: u128 = job_runs.iter().map(|run| run.duration_ms).sum();
+            total_duration / total_jobs as u128
+        } else {
+            0
+        };
+        
         let content = serde_json::json!({
-            "recent_jobs": [],
-            "success_rate": 0.0,
-            "average_duration": 0.0,
-            "total_jobs": 0,
+            "recent_jobs": job_runs.iter().take(10).map(|run| {
+                serde_json::json!({
+                    "id": run.job_id,
+                    "name": run.job_name,
+                    "status": run.status,
+                    "started_at": run.started_at,
+                    "completed_at": run.completed_at,
+                    "duration_ms": run.duration_ms,
+                })
+            }).collect::<Vec<_>>(),
+            "success_rate": success_rate,
+            "average_duration_ms": average_duration,
+            "total_jobs": total_jobs,
             "last_updated": Utc::now().to_rfc3339(),
         });
         
