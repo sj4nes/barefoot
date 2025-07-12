@@ -76,7 +76,7 @@ pub struct ContainerCleanupConfig {
 ///
 /// # Examples
 /// ```rust
-/// use barefoot::types::{RunnerConfig, RunnerCapabilities};
+/// use barefoot::types::{RunnerConfig, RunnerCapabilities, ContainerCleanupConfig};
 /// use std::collections::HashMap;
 /// let config = RunnerConfig {
 ///     name: "runner".to_string(),
@@ -91,6 +91,13 @@ pub struct ContainerCleanupConfig {
 ///     },
 ///     max_concurrent_jobs: 1,
 ///     work_dir: ".".to_string(),
+///     container_backend: "docker".to_string(),
+///     container_backend_opts: None,
+///     container_cleanup: ContainerCleanupConfig {
+///         enabled: true,
+///         interval_minutes: 60,
+///         max_usage_bytes: 1024 * 1024 * 1024,
+///     },
 /// };
 /// assert_eq!(config.name, "runner");
 /// ```
