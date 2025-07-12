@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Initialize logging
-    let subscriber = tracing_subscriber::FmtSubscriber::builder()
+    tracing_subscriber::FmtSubscriber::builder()
         .with_env_filter(tracing_subscriber::EnvFilter::new(format!("barefoot={}", cli.log_level)))
         .with_target(false)
         .with_thread_ids(true)
@@ -272,10 +272,10 @@ async fn configure_runner(
 
     // Save configuration
     let config_content = toml::to_string_pretty(&config)
-        .map_err(|e| barefoot::error::BarefootError::TomlSerialization(e))?;
+        .map_err(barefoot::error::BarefootError::TomlSerialization)?;
     
     std::fs::write(config_path, config_content)
-        .map_err(|e| barefoot::error::BarefootError::Io(e))?;
+        .map_err(barefoot::error::BarefootError::Io)?;
 
     info!("Configuration saved to: {:?}", config_path);
     Ok(())
