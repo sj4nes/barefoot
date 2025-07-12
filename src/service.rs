@@ -211,16 +211,27 @@ impl JujutsuClient {
 
         let mut jobs = Vec::new();
         
-        // Scan for .json files in .barefoot directory
+        // Scan for .json and .toml files in .barefoot directory
         if let Ok(entries) = std::fs::read_dir(&barefoot_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Ok(job) = serde_json::from_str::<Job>(&content) {
-                            jobs.push(job);
-                        } else {
-                            tracing::warn!("Failed to parse job file: {:?}", path);
+                if let Some(extension) = path.extension().and_then(|s| s.to_str()) {
+                    if extension == "json" || extension == "toml" {
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            let job_result = if extension == "json" {
+                                serde_json::from_str::<Job>(&content)
+                                    .map_err(|e| crate::error::BarefootError::Serialization(e.into()))
+                            } else {
+                                // TOML parsing
+                                toml::from_str::<Job>(&content)
+                                    .map_err(|e| crate::error::BarefootError::TomlDeserialization(e))
+                            };
+                            
+                            if let Ok(job) = job_result {
+                                jobs.push(job);
+                            } else {
+                                tracing::warn!("Failed to parse job file: {:?}", path);
+                            }
                         }
                     }
                 }
@@ -347,6 +358,12 @@ impl ServiceClient for JujutsuClient {
             return self.scan_local_jobs().await;
         }
 
+        // For local Jujutsu jobs, we should always use local scanning
+        // Only use HTTP polling if we have a proper HTTP URL
+        if !self.base_url.starts_with("http://") && !self.base_url.starts_with("https://") {
+            return Ok(vec![]); // No jobs available for invalid URL
+        }
+
         // Otherwise, use HTTP polling
         let response = self.client
             .get(format!("{}/jobs", self.base_url))
@@ -368,6 +385,18 @@ impl ServiceClient for JujutsuClient {
     }
     
     async fn update_job_status(&self, job_id: &str, status: &str) -> Result<()> {
+        // For local Jujutsu jobs, just log the status update
+        if self.repository_path.is_some() {
+            tracing::info!("Job {} status updated to: {}", job_id, status);
+            return Ok(());
+        }
+
+        // For remote Jujutsu jobs, use HTTP update
+        if !self.base_url.starts_with("http://") && !self.base_url.starts_with("https://") {
+            tracing::info!("Skipping job status update for invalid URL: {}", self.base_url);
+            return Ok(());
+        }
+
         let response = self.client
             .patch(format!("{}/jobs/{}", self.base_url, job_id))
             .json(&serde_json::json!({
@@ -387,6 +416,18 @@ impl ServiceClient for JujutsuClient {
     }
     
     async fn send_job_logs(&self, job_id: &str, logs: &str) -> Result<()> {
+        // For local Jujutsu jobs, just log the logs
+        if self.repository_path.is_some() {
+            tracing::info!("Job {} logs: {}", job_id, logs);
+            return Ok(());
+        }
+
+        // For remote Jujutsu jobs, use HTTP send
+        if !self.base_url.starts_with("http://") && !self.base_url.starts_with("https://") {
+            tracing::info!("Skipping job logs send for invalid URL: {}", self.base_url);
+            return Ok(());
+        }
+
         let response = self.client
             .post(format!("{}/jobs/{}/logs", self.base_url, job_id))
             .body(logs.to_string())
@@ -405,6 +446,18 @@ impl ServiceClient for JujutsuClient {
     }
     
     async fn register_runner(&self, capabilities: &RunnerCapabilities) -> Result<()> {
+        // For local Jujutsu jobs, registration is not needed
+        if self.repository_path.is_some() {
+            tracing::info!("Skipping runner registration for local Jujutsu jobs");
+            return Ok(());
+        }
+
+        // For remote Jujutsu jobs, use HTTP registration
+        if !self.base_url.starts_with("http://") && !self.base_url.starts_with("https://") {
+            tracing::info!("Skipping runner registration for invalid URL: {}", self.base_url);
+            return Ok(());
+        }
+
         let response = self.client
             .post(format!("{}/runners", self.base_url))
             .json(&serde_json::json!({
@@ -510,7 +563,7 @@ mod tests {
         let barefoot_dir = temp_dir.path().join(".barefoot");
         fs::create_dir(&barefoot_dir).unwrap();
 
-        // Create a test job file with proper Job structure
+        // Create a test job file with proper Job structure (JSON)
         let job_file = barefoot_dir.join("test-job.json");
         let job_content = r#"{
             "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -534,6 +587,50 @@ mod tests {
         let jobs = jobs.unwrap();
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].name, "Test Job");
+    }
+
+    #[tokio::test]
+    async fn test_jujutsu_local_directory_scanning_toml() {
+        let temp_dir = TempDir::new().unwrap();
+        let barefoot_dir = temp_dir.path().join(".barefoot");
+        fs::create_dir(&barefoot_dir).unwrap();
+
+        // Create a test job file with proper Job structure (TOML)
+        let job_file = barefoot_dir.join("test-job.toml");
+        let job_content = r#"id = "550e8400-e29b-41d4-a716-446655440000"
+name = "Test Job TOML"
+status = "Queued"
+workflow = "test-workflow"
+repository = "test-repo"
+
+[[steps]]
+name = "test-step"
+status = "Queued"
+run = "echo 'hello'""#;
+        fs::write(&job_file, job_content).unwrap();
+
+        // Try parsing the TOML directly
+        match toml::from_str::<crate::types::Job>(&job_content) {
+            Ok(_) => println!("TOML parsed successfully"),
+            Err(e) => println!("Direct TOML parse error: {e}"),
+        }
+
+        let mut config = test_config();
+        config.service.url = temp_dir.path().to_string_lossy().to_string();
+        let client = JujutsuClient::new(config);
+        
+        // Test that the client can scan the directory
+        let jobs = client.get_jobs().await;
+        if let Err(e) = &jobs {
+            println!("TOML parse error: {e}");
+        }
+        assert!(jobs.is_ok());
+        let jobs = jobs.unwrap();
+        if jobs.is_empty() {
+            println!("No jobs parsed from TOML");
+        }
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].name, "Test Job TOML");
     }
 
     #[tokio::test]
@@ -589,18 +686,22 @@ mod tests {
         // Wait a moment for the watcher to start
         sleep(Duration::from_millis(100)).await;
 
-        // Create a job file
-        let job_file = barefoot_dir.join("new-job.json");
-        let job_content = r#"{
-            "id": "550e8400-e29b-41d4-a716-446655440001",
-            "name": "New Job",
-            "status": "Queued",
-            "workflow": "test-workflow",
-            "repository": "test-repo",
-            "started_at": null,
-            "completed_at": null,
-            "steps": []
-        }"#;
+        // Create a job file (TOML format)
+        let job_file = barefoot_dir.join("new-job.toml");
+        let job_content = r#"id = "550e8400-e29b-41d4-a716-446655440001"
+name = "New Job"
+status = "Queued"
+workflow = "test-workflow"
+repository = "test-repo"
+started_at = null
+completed_at = null
+
+[[steps]]
+name = "test-step"
+status = "Queued"
+run = "echo 'hello'"
+uses = null
+duration = null"#;
         fs::write(&job_file, job_content).unwrap();
 
         // Wait for file change notification (polling approach)
@@ -608,7 +709,7 @@ mod tests {
         assert!(change.is_ok());
         let change = change.unwrap();
         assert!(change.is_some());
-        assert_eq!(change.unwrap(), "new-job.json");
+        assert_eq!(change.unwrap(), "new-job.toml");
 
         // Clean up
         if let Ok(handle) = watch_handle {
@@ -634,19 +735,39 @@ mod tests {
         // Wait a moment for the watcher to start
         sleep(Duration::from_millis(100)).await;
 
-        // Create multiple files rapidly
+        // Create multiple files rapidly (mix of JSON and TOML)
         for i in 0..3 {
-            let job_file = barefoot_dir.join(format!("job-{i}.json"));
-            let job_content = format!(r#"{{
-                "id": "550e8400-e29b-41d4-a716-446655440{i:03}",
-                "name": "Job {i}",
-                "status": "Queued",
-                "workflow": "test-workflow",
-                "repository": "test-repo",
-                "started_at": null,
-                "completed_at": null,
-                "steps": []
-            }}"#);
+            let extension = if i % 2 == 0 { "json" } else { "toml" };
+            let job_file = barefoot_dir.join(format!("job-{i}.{extension}"));
+            
+            let job_content = if extension == "json" {
+                format!(r#"{{
+                    "id": "550e8400-e29b-41d4-a716-446655440{:03}",
+                    "name": "Job {}",
+                    "status": "Queued",
+                    "workflow": "test-workflow",
+                    "repository": "test-repo",
+                    "started_at": null,
+                    "completed_at": null,
+                    "steps": []
+                }}"#, i, i)
+            } else {
+                format!(r#"id = "550e8400-e29b-41d4-a716-446655440{:03}"
+name = "Job {}"
+status = "Queued"
+workflow = "test-workflow"
+repository = "test-repo"
+started_at = null
+completed_at = null
+
+[[steps]]
+name = "test-step"
+status = "Queued"
+run = "echo 'hello'"
+uses = null
+duration = null"#, i, i)
+            };
+            
             fs::write(&job_file, job_content).unwrap();
         }
 

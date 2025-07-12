@@ -1,0 +1,10 @@
+id = "550e8400-e29b-41d4-a716-446655440001"
+name = "Cargo Audit"
+status = "Queued"
+workflow = "barefoot-ci"
+repository = "barefoot"
+
+[[steps]]
+name = "cargo-audit"
+status = "Queued"
+run = "cargo audit" 

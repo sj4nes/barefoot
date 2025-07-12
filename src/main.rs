@@ -196,31 +196,36 @@ async fn run_foreground(
                 for job in jobs {
                     info!("Processing job: {}", job.id);
                     
-                    // Execute the job
-                    match executor.execute_job(job.clone()).await {
-                        Ok(status) => {
-                            info!("Job {} completed with status: {:?}", job.id, status);
-                            
-                            // Update job status
-                            let status_str = match status {
-                                barefoot::types::JobStatus::Completed => "completed",
-                                barefoot::types::JobStatus::Failed => "failed",
-                                barefoot::types::JobStatus::Cancelled => "cancelled",
-                                _ => "unknown",
-                            };
-                            
-                            if let Err(e) = service_client.update_job_status(&job.id.to_string(), status_str).await {
-                                error!("Failed to update job status: {}", e);
-                            }
-                        }
-                        Err(e) => {
-                            error!("Job {} failed: {}", job.id, e);
-                            
-                            if let Err(e) = service_client.update_job_status(&job.id.to_string(), "failed").await {
-                                error!("Failed to update job status: {}", e);
-                            }
-                        }
-                    }
+                                                    // Execute the job
+                                match executor.execute_job(job.clone()).await {
+                                    Ok((status, logs)) => {
+                                        info!("Job {} completed with status: {:?}", job.id, status);
+                                        
+                                        // Send job logs
+                                        if let Err(e) = service_client.send_job_logs(&job.id.to_string(), &logs).await {
+                                            error!("Failed to send job logs: {}", e);
+                                        }
+                                        
+                                        // Update job status
+                                        let status_str = match status {
+                                            barefoot::types::JobStatus::Completed => "completed",
+                                            barefoot::types::JobStatus::Failed => "failed",
+                                            barefoot::types::JobStatus::Cancelled => "cancelled",
+                                            _ => "unknown",
+                                        };
+                                        
+                                        if let Err(e) = service_client.update_job_status(&job.id.to_string(), status_str).await {
+                                            error!("Failed to update job status: {}", e);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Job {} failed: {}", job.id, e);
+                                        
+                                        if let Err(e) = service_client.update_job_status(&job.id.to_string(), "failed").await {
+                                            error!("Failed to update job status: {}", e);
+                                        }
+                                    }
+                                }
                 }
             }
             Err(e) => {
@@ -270,8 +275,13 @@ async fn run_daemon(
                                 
                                 // Execute the job
                                 match executor.execute_job(job.clone()).await {
-                                    Ok(status) => {
+                                    Ok((status, logs)) => {
                                         info!("Job {} completed with status: {:?}", job.id, status);
+                                        
+                                        // Send job logs
+                                        if let Err(e) = service_client.send_job_logs(&job.id.to_string(), &logs).await {
+                                            error!("Failed to send job logs: {}", e);
+                                        }
                                         
                                         // Update job status
                                         let status_str = match status {

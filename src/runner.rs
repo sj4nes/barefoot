@@ -22,7 +22,7 @@ impl JobExecutor {
     }
 
     /// Execute a job
-    pub async fn execute_job(&self, job: Job) -> Result<JobStatus> {
+    pub async fn execute_job(&self, job: Job) -> Result<(JobStatus, String)> {
         tracing::info!("Starting job execution: {}", job.id);
         
         // Start the job
@@ -30,15 +30,21 @@ impl JobExecutor {
 
         let start_time = Utc::now();
         let mut final_status = JobStatus::Completed;
+        let mut all_logs = String::new();
 
         // Execute each step in the job
         for step in &job.steps {
             match self.execute_step(step).await {
-                Ok(_) => {
+                Ok(logs) => {
                     tracing::info!("Step completed: {}", step.name);
+                    all_logs.push_str(&format!("=== Step: {} ===\n", step.name));
+                    all_logs.push_str(&logs);
+                    all_logs.push_str("\n");
                 }
                 Err(e) => {
                     tracing::error!("Step failed: {} - {}", step.name, e);
+                    all_logs.push_str(&format!("=== Step: {} FAILED ===\n", step.name));
+                    all_logs.push_str(&format!("Error: {}\n", e));
                     final_status = JobStatus::Failed;
                     
                     // Complete the job with failed status
@@ -69,31 +75,29 @@ impl JobExecutor {
             duration
         );
 
-        Ok(final_status)
+        Ok((final_status, all_logs))
     }
 
     /// Execute a single step
-    async fn execute_step(&self, step: &crate::types::JobStep) -> Result<()> {
+    async fn execute_step(&self, step: &crate::types::JobStep) -> Result<String> {
         tracing::info!("Executing step: {}", step.name);
 
         // Enhanced step execution with support for different step types
         if let Some(command) = &step.run {
             // Handle 'run' steps
-            self.execute_shell_command(command).await?;
+            self.execute_shell_command(command).await
         } else if let Some(action) = &step.uses {
             // Handle 'uses' steps
-            self.execute_action_step(action).await?;
+            self.execute_action_step(action).await
         } else {
             return Err(crate::error::BarefootError::Workflow(
                 format!("Step '{}' must have either 'run' or 'uses'", step.name)
             ));
         }
-
-        Ok(())
     }
 
     /// Execute an action step (uses: action@version)
-    async fn execute_action_step(&self, action: &str) -> Result<()> {
+    async fn execute_action_step(&self, action: &str) -> Result<String> {
         tracing::info!("Executing action: {}", action);
         
         // Parse action reference (e.g., "actions/checkout@v3")
@@ -102,34 +106,34 @@ impl JobExecutor {
         // For now, implement basic action support
         match action_name.as_str() {
             "actions/checkout" => {
-                self.execute_checkout_action(&version).await?;
+                self.execute_checkout_action(&version).await
             }
             "actions-rs/toolchain" => {
-                self.execute_toolchain_action(&version).await?;
+                self.execute_toolchain_action(&version).await
             }
             "actions/setup-node" => {
-                self.execute_setup_node_action(&version).await?;
+                self.execute_setup_node_action(&version).await
             }
             "actions/setup-python" => {
-                self.execute_setup_python_action(&version).await?;
+                self.execute_setup_python_action(&version).await
             }
             "actions/cache" => {
-                self.execute_cache_action(&version).await?;
+                self.execute_cache_action(&version).await
             }
             "actions/setup-java" => {
-                self.execute_setup_java_action(&version).await?;
+                self.execute_setup_java_action(&version).await
             }
             "actions/setup-go" => {
-                self.execute_setup_go_action(&version).await?;
+                self.execute_setup_go_action(&version).await
             }
             "actions/setup-dotnet" => {
-                self.execute_setup_dotnet_action(&version).await?;
+                self.execute_setup_dotnet_action(&version).await
             }
             "actions/upload-artifact" => {
-                self.execute_upload_artifact_action(&version).await?;
+                self.execute_upload_artifact_action(&version).await
             }
             "actions/download-artifact" => {
-                self.execute_download_artifact_action(&version).await?;
+                self.execute_download_artifact_action(&version).await
             }
             _ => {
                 // DONE: Support additional GitHub Actions and custom actions (setup-node, setup-python, cache, setup-java, setup-go, setup-dotnet, upload-artifact, download-artifact are now supported)
@@ -138,8 +142,6 @@ impl JobExecutor {
                 ));
             }
         }
-        
-        Ok(())
     }
 
     /// Parse action reference into name and version
@@ -155,7 +157,7 @@ impl JobExecutor {
     }
 
     /// Execute checkout action
-    async fn execute_checkout_action(&self, _version: &str) -> Result<()> {
+    async fn execute_checkout_action(&self, _version: &str) -> Result<String> {
         tracing::info!("Executing checkout action");
         
         // Basic checkout implementation
@@ -166,30 +168,36 @@ impl JobExecutor {
             "git checkout -b main origin/main",
         ];
         
+        let mut all_logs = String::new();
         for command in commands {
-            self.execute_shell_command(command).await?;
+            let logs = self.execute_shell_command(command).await?;
+            all_logs.push_str(&logs);
         }
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute toolchain action
-    async fn execute_toolchain_action(&self, version: &str) -> Result<()> {
+    async fn execute_toolchain_action(&self, version: &str) -> Result<String> {
         tracing::info!("Executing toolchain action with version: {}", version);
+        
+        let mut all_logs = String::new();
         
         // Install specified Rust version
         let command = format!("rustup install {version}");
-        self.execute_shell_command(&command).await?;
+        let logs = self.execute_shell_command(&command).await?;
+        all_logs.push_str(&logs);
         
         // Set as default
         let command = format!("rustup default {version}");
-        self.execute_shell_command(&command).await?;
+        let logs = self.execute_shell_command(&command).await?;
+        all_logs.push_str(&logs);
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute setup-node action
-    async fn execute_setup_node_action(&self, _version: &str) -> Result<()> {
+    async fn execute_setup_node_action(&self, _version: &str) -> Result<String> {
         tracing::info!("Executing setup-node action");
         
         // Basic Node.js setup implementation
@@ -199,15 +207,17 @@ impl JobExecutor {
             "node --version || echo 'Node.js not installed'",
         ];
         
+        let mut all_logs = String::new();
         for command in commands {
-            self.execute_shell_command(command).await?;
+            let logs = self.execute_shell_command(command).await?;
+            all_logs.push_str(&logs);
         }
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute setup-python action
-    async fn execute_setup_python_action(&self, _version: &str) -> Result<()> {
+    async fn execute_setup_python_action(&self, _version: &str) -> Result<String> {
         tracing::info!("Executing setup-python action");
         
         // Basic Python setup implementation
@@ -217,15 +227,17 @@ impl JobExecutor {
             "python3 --version || echo 'Python3 not installed'",
         ];
         
+        let mut all_logs = String::new();
         for command in commands {
-            self.execute_shell_command(command).await?;
+            let logs = self.execute_shell_command(command).await?;
+            all_logs.push_str(&logs);
         }
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute cache action
-    async fn execute_cache_action(&self, _version: &str) -> Result<()> {
+    async fn execute_cache_action(&self, _version: &str) -> Result<String> {
         tracing::info!("Executing cache action");
         
         // Basic cache implementation
@@ -235,15 +247,17 @@ impl JobExecutor {
             "mkdir -p ~/.cache/barefoot",
         ];
         
+        let mut all_logs = String::new();
         for command in commands {
-            self.execute_shell_command(command).await?;
+            let logs = self.execute_shell_command(command).await?;
+            all_logs.push_str(&logs);
         }
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute setup-java action
-    async fn execute_setup_java_action(&self, _version: &str) -> Result<()> {
+    async fn execute_setup_java_action(&self, _version: &str) -> Result<String> {
         tracing::info!("Executing setup-java action");
         
         // Basic Java setup implementation
@@ -253,15 +267,17 @@ impl JobExecutor {
             "java -version || echo 'Java not installed'",
         ];
         
+        let mut all_logs = String::new();
         for command in commands {
-            self.execute_shell_command(command).await?;
+            let logs = self.execute_shell_command(command).await?;
+            all_logs.push_str(&logs);
         }
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute setup-go action
-    async fn execute_setup_go_action(&self, _version: &str) -> Result<()> {
+    async fn execute_setup_go_action(&self, _version: &str) -> Result<String> {
         tracing::info!("Executing setup-go action");
         
         // Basic Go setup implementation
@@ -271,15 +287,17 @@ impl JobExecutor {
             "go version || echo 'Go not installed'",
         ];
         
+        let mut all_logs = String::new();
         for command in commands {
-            self.execute_shell_command(command).await?;
+            let logs = self.execute_shell_command(command).await?;
+            all_logs.push_str(&logs);
         }
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute setup-dotnet action
-    async fn execute_setup_dotnet_action(&self, _version: &str) -> Result<()> {
+    async fn execute_setup_dotnet_action(&self, _version: &str) -> Result<String> {
         tracing::info!("Executing setup-dotnet action");
         
         // Basic .NET setup implementation
@@ -289,15 +307,17 @@ impl JobExecutor {
             "dotnet --version || echo '.NET not installed'",
         ];
         
+        let mut all_logs = String::new();
         for command in commands {
-            self.execute_shell_command(command).await?;
+            let logs = self.execute_shell_command(command).await?;
+            all_logs.push_str(&logs);
         }
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute upload-artifact action
-    async fn execute_upload_artifact_action(&self, _version: &str) -> Result<()> {
+    async fn execute_upload_artifact_action(&self, _version: &str) -> Result<String> {
         tracing::info!("Executing upload-artifact action");
         
         // Basic artifact upload implementation
@@ -307,15 +327,17 @@ impl JobExecutor {
             "mkdir -p artifacts",
         ];
         
+        let mut all_logs = String::new();
         for command in commands {
-            self.execute_shell_command(command).await?;
+            let logs = self.execute_shell_command(command).await?;
+            all_logs.push_str(&logs);
         }
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute download-artifact action
-    async fn execute_download_artifact_action(&self, _version: &str) -> Result<()> {
+    async fn execute_download_artifact_action(&self, _version: &str) -> Result<String> {
         tracing::info!("Executing download-artifact action");
         
         // Basic artifact download implementation
@@ -325,15 +347,17 @@ impl JobExecutor {
             "mkdir -p downloads",
         ];
         
+        let mut all_logs = String::new();
         for command in commands {
-            self.execute_shell_command(command).await?;
+            let logs = self.execute_shell_command(command).await?;
+            all_logs.push_str(&logs);
         }
         
-        Ok(())
+        Ok(all_logs)
     }
 
     /// Execute a shell command
-    async fn execute_shell_command(&self, command: &str) -> Result<()> {
+    async fn execute_shell_command(&self, command: &str) -> Result<String> {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| {
             if cfg!(windows) {
                 "cmd".to_string()
@@ -356,15 +380,25 @@ impl JobExecutor {
             .await
             .map_err(|e| crate::error::BarefootError::Process(e.to_string()))?;
 
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            return Err(crate::error::BarefootError::Process(error.to_string()));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        
+        // Combine stdout and stderr for logging
+        let mut logs = String::new();
+        if !stdout.is_empty() {
+            logs.push_str(&format!("STDOUT:\n{}\n", stdout));
+        }
+        if !stderr.is_empty() {
+            logs.push_str(&format!("STDERR:\n{}\n", stderr));
         }
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        tracing::debug!("Command output: {}", stdout);
+        if !output.status.success() {
+            return Err(crate::error::BarefootError::Process(format!("Command failed: {}\n{}", command, logs)));
+        }
 
-        Ok(())
+        tracing::debug!("Command output: {}", logs);
+
+        Ok(logs)
     }
 
     /// Parse workflow from YAML

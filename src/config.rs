@@ -108,13 +108,15 @@ impl BarefootConfig {
 
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
-        if self.runner.token.is_empty() {
+        // Allow empty runner token for Jujutsu service type (local jobs)
+        if self.runner.token.is_empty() && self.service.service_type != ServiceType::Jujutsu {
             return Err(crate::error::BarefootError::Configuration(
                 "Runner token is required".to_string(),
             ));
         }
 
-        if self.service.token.is_empty() {
+        // Allow empty service token for Jujutsu service type (local jobs)
+        if self.service.token.is_empty() && self.service.service_type != ServiceType::Jujutsu {
             return Err(crate::error::BarefootError::Configuration(
                 "Service token is required".to_string(),
             ));

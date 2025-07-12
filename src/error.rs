@@ -16,6 +16,9 @@ pub enum BarefootError {
     #[error("TOML serialization error: {0}")]
     TomlSerialization(#[from] toml::ser::Error),
     
+    #[error("TOML deserialization error: {0}")]
+    TomlDeserialization(#[from] toml::de::Error),
+    
     #[error("YAML parsing error: {0}")]
     Yaml(#[from] serde_yaml::Error),
     

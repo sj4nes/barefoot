@@ -1,0 +1,10 @@
+id = "550e8400-e29b-41d4-a716-446655440003"
+name = "Cargo Clippy"
+status = "Queued"
+workflow = "barefoot-ci"
+repository = "barefoot"
+
+[[steps]]
+name = "cargo-clippy"
+status = "Queued"
+run = "cargo clippy" 
