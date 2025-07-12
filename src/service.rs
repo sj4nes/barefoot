@@ -297,3 +297,41 @@ impl ServiceClientFactory {
         }
     }
 } 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::BarefootConfig;
+    use crate::types::ServiceType;
+
+    fn test_config() -> BarefootConfig {
+        let mut config = BarefootConfig::default();
+        config.service.service_type = ServiceType::Jujutsu;
+        config.service.url = "http://localhost:8080".to_string();
+        config.service.token = "test-token".to_string();
+        config
+    }
+
+    #[tokio::test]
+    async fn test_jujutsu_client_creation() {
+        let config = test_config();
+        let client = JujutsuClient::new(config);
+        assert_eq!(client.base_url, "http://localhost:8080");
+    }
+
+    #[tokio::test]
+    async fn test_jujutsu_client_get_jobs_network_error() {
+        let config = test_config();
+        let client = JujutsuClient::new(config);
+        let jobs = client.get_jobs().await;
+        // Should fail due to network error (localhost:8080 not available)
+        assert!(jobs.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_service_client_factory_jujutsu() {
+        let config = test_config();
+        let client = ServiceClientFactory::create_client(config);
+        assert!(client.is_ok());
+    }
+} 
