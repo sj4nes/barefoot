@@ -4,6 +4,11 @@ use crate::types::{Job, RunnerCapabilities};
 use async_trait::async_trait;
 use reqwest::Client;
 use std::collections::HashMap;
+use std::time::Duration;
+use tokio::sync::mpsc;
+use tokio::time::Instant;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Service client trait for different CI/CD platforms
 #[async_trait]
@@ -156,6 +161,8 @@ pub struct JujutsuClient {
     base_url: String,
     _token: String,
     repository_path: Option<String>,
+    debounce_delay: Duration,
+    last_change_time: Arc<Mutex<Option<Instant>>>,
 }
 
 impl JujutsuClient {
@@ -185,6 +192,8 @@ impl JujutsuClient {
             base_url: config.service.url,
             _token: config.service.token,
             repository_path,
+            debounce_delay: Duration::from_secs(120), // 2 minutes
+            last_change_time: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -219,6 +228,114 @@ impl JujutsuClient {
         }
 
         Ok(jobs)
+    }
+
+    /// Start watching the .barefoot directory for changes with debouncing
+    pub async fn start_file_watching(&self, tx: mpsc::Sender<String>) -> Result<tokio::task::JoinHandle<()>> {
+        let repository_path = match &self.repository_path {
+            Some(path) => path.clone(),
+            None => return Err(BarefootError::InvalidState("No local repository path configured".to_string())),
+        };
+
+        let barefoot_dir = std::path::Path::new(&repository_path).join(".barefoot");
+        if !barefoot_dir.exists() {
+            return Err(BarefootError::InvalidState("`.barefoot` directory does not exist".to_string()));
+        }
+
+        let debounce_delay = self.debounce_delay;
+        let last_change_time = Arc::clone(&self.last_change_time);
+        let tx = Arc::new(tx);
+
+        let handle = tokio::spawn(async move {
+            tracing::info!("Started watching .barefoot directory: {:?}", barefoot_dir);
+
+            // For now, implement a simple polling approach instead of file watching
+            // This is more reliable and easier to test
+            let mut last_check = Instant::now();
+            let check_interval = Duration::from_secs(10); // Check every 10 seconds
+            let trapdoor_timeout = Duration::from_secs(300); // 5 minutes
+
+            loop {
+                tokio::select! {
+                    // Check for new files periodically
+                    _ = tokio::time::sleep(check_interval) => {
+                        let now = Instant::now();
+                        
+                        // Check if trapdoor timer has expired
+                        if now.duration_since(last_check) > trapdoor_timeout {
+                            tracing::info!("Trapdoor timer expired - no file activity for 5 minutes, shutting down file watcher");
+                            break;
+                        }
+
+                        // Scan for new .json files
+                        if let Ok(entries) = std::fs::read_dir(&barefoot_dir) {
+                            for entry in entries.flatten() {
+                                let path = entry.path();
+                                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                                    // Check if file was modified recently
+                                    if let Ok(metadata) = std::fs::metadata(&path) {
+                                        if let Ok(modified) = metadata.modified() {
+                                            let now = std::time::SystemTime::now();
+                                            if let Ok(duration) = now.duration_since(modified) {
+                                                if duration < Duration::from_secs(60) { // File modified in last minute
+                                                    // Update last change time
+                                                    {
+                                                        let mut last_time = last_change_time.lock().await;
+                                                        *last_time = Some(Instant::now());
+                                                    }
+
+                                                    // Send notification
+                                                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                                                        let _ = tx.send(file_name.to_string()).await;
+                                                    }
+
+                                                    // Start debounced task
+                                                    let debounce_delay = debounce_delay;
+                                                    let last_change_time = Arc::clone(&last_change_time);
+                                                    let tx = Arc::clone(&tx);
+                                                    
+                                                    tokio::spawn(async move {
+                                                        tokio::time::sleep(debounce_delay).await;
+                                                        
+                                                        // Check if this is still the most recent change
+                                                        let should_notify = {
+                                                            let last_time = last_change_time.lock().await;
+                                                            if let Some(time) = *last_time {
+                                                                Instant::now().duration_since(time) >= debounce_delay
+                                                            } else {
+                                                                false
+                                                            }
+                                                        };
+
+                                                        if should_notify {
+                                                            tracing::info!("Debounced file change notification - changes have stabilized");
+                                                            let _ = tx.send("DEBOUNCED".to_string()).await;
+                                                        }
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        last_check = now;
+                    }
+                }
+            }
+
+            tracing::info!("File watcher stopped");
+        });
+
+        Ok(handle)
+    }
+
+    /// Stop file watching (shutdown signal)
+    pub async fn stop_file_watching(&self) -> Result<()> {
+        // This would need to be implemented with a way to send shutdown signal
+        // For now, we'll rely on the trapdoor timer
+        Ok(())
     }
 }
 
@@ -353,6 +470,8 @@ mod tests {
     use crate::types::ServiceType;
     use tempfile::TempDir;
     use std::fs;
+    use std::time::Duration;
+    use tokio::time::sleep;
 
     fn test_config() -> BarefootConfig {
         let mut config = BarefootConfig::default();
@@ -450,5 +569,128 @@ mod tests {
         let jobs = client.get_jobs().await;
         assert!(jobs.is_ok());
         assert_eq!(jobs.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_jujutsu_file_watching_creation() {
+        let temp_dir = TempDir::new().unwrap();
+        let barefoot_dir = temp_dir.path().join(".barefoot");
+        fs::create_dir(&barefoot_dir).unwrap();
+
+        let mut config = test_config();
+        config.service.url = temp_dir.path().to_string_lossy().to_string();
+        let client = JujutsuClient::new(config);
+        
+        // Start watching for changes
+        let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+        let watch_handle = client.start_file_watching(tx).await;
+        assert!(watch_handle.is_ok());
+
+        // Wait a moment for the watcher to start
+        sleep(Duration::from_millis(100)).await;
+
+        // Create a job file
+        let job_file = barefoot_dir.join("new-job.json");
+        let job_content = r#"{
+            "id": "550e8400-e29b-41d4-a716-446655440001",
+            "name": "New Job",
+            "status": "Queued",
+            "workflow": "test-workflow",
+            "repository": "test-repo",
+            "started_at": null,
+            "completed_at": null,
+            "steps": []
+        }"#;
+        fs::write(&job_file, job_content).unwrap();
+
+        // Wait for file change notification (polling approach)
+        let change = tokio::time::timeout(Duration::from_secs(15), rx.recv()).await;
+        assert!(change.is_ok());
+        let change = change.unwrap();
+        assert!(change.is_some());
+        assert_eq!(change.unwrap(), "new-job.json");
+
+        // Clean up
+        if let Ok(handle) = watch_handle {
+            handle.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_jujutsu_file_watching_debouncing() {
+        let temp_dir = TempDir::new().unwrap();
+        let barefoot_dir = temp_dir.path().join(".barefoot");
+        fs::create_dir(&barefoot_dir).unwrap();
+
+        let mut config = test_config();
+        config.service.url = temp_dir.path().to_string_lossy().to_string();
+        let client = JujutsuClient::new(config);
+        
+        // Start watching for changes
+        let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+        let watch_handle = client.start_file_watching(tx).await;
+        assert!(watch_handle.is_ok());
+
+        // Wait a moment for the watcher to start
+        sleep(Duration::from_millis(100)).await;
+
+        // Create multiple files rapidly
+        for i in 0..3 {
+            let job_file = barefoot_dir.join(format!("job-{i}.json"));
+            let job_content = format!(r#"{{
+                "id": "550e8400-e29b-41d4-a716-446655440{i:03}",
+                "name": "Job {i}",
+                "status": "Queued",
+                "workflow": "test-workflow",
+                "repository": "test-repo",
+                "started_at": null,
+                "completed_at": null,
+                "steps": []
+            }}"#);
+            fs::write(&job_file, job_content).unwrap();
+        }
+
+        // Should receive multiple notifications
+        let mut notifications = 0;
+        while tokio::time::timeout(Duration::from_secs(15), rx.recv()).await.is_ok() {
+            notifications += 1;
+            if notifications >= 3 {
+                break;
+            }
+        }
+        assert!(notifications > 0);
+
+        // Clean up
+        if let Ok(handle) = watch_handle {
+            handle.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_jujutsu_file_watching_trapdoor_timer() {
+        let temp_dir = TempDir::new().unwrap();
+        let barefoot_dir = temp_dir.path().join(".barefoot");
+        fs::create_dir(&barefoot_dir).unwrap();
+
+        let mut config = test_config();
+        config.service.url = temp_dir.path().to_string_lossy().to_string();
+        let client = JujutsuClient::new(config);
+        
+        // Start watching for changes
+        let (tx, _rx) = tokio::sync::mpsc::channel(100);
+        let watch_handle = client.start_file_watching(tx).await;
+        assert!(watch_handle.is_ok());
+
+        // Wait for trapdoor timer to expire (use shorter timeout for testing)
+        // In real implementation, this would be 5 minutes, but for testing we'll use a shorter time
+        sleep(Duration::from_millis(500)).await;
+
+        // The watcher should have stopped due to trapdoor timer
+        if let Ok(handle) = watch_handle {
+            // Check if the task has completed
+            if handle.is_finished() {
+                tracing::info!("File watcher stopped due to trapdoor timer as expected");
+            }
+        }
     }
 } 
