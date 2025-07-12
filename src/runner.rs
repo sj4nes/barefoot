@@ -8,6 +8,7 @@ use tokio::process::Command;
 use uuid::Uuid;
 use chrono::Utc;
 
+// TODO[4]: Future enhancements: support for advanced workflow step types (e.g., 'uses', matrix builds), and improved error handling.
 /// Job executor
 pub struct JobExecutor {
     core: RunnerCore,
