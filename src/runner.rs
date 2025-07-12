@@ -216,7 +216,7 @@ impl JobExecutor {
                 jobs.extend(matrix_jobs);
             } else {
                 // Single job without matrix
-                let job = self.create_job_from_workflow_job(&job_name, &job_config, &workflow.name).await?;
+                let job = self.create_job_from_workflow_job(&job_name, &job_config, &workflow.name, "unknown").await?;
                 jobs.push(job);
             }
         }
@@ -238,7 +238,7 @@ impl JobExecutor {
         let combinations = self.generate_matrix_combinations(&strategy.matrix)?;
         
         for combination in combinations.iter() {
-            let job = self.create_matrix_job(job_name, job_config, workflow_name, combination).await?;
+            let job = self.create_matrix_job(job_name, job_config, workflow_name, combination, "unknown").await?;
             matrix_jobs.push(job);
         }
         
@@ -273,6 +273,7 @@ impl JobExecutor {
         job_config: &WorkflowJob,
         workflow_name: &str,
         _matrix_values: &HashMap<String, serde_json::Value>,
+        repository: &str,
     ) -> Result<Job> {
         let mut steps = Vec::new();
 
@@ -292,7 +293,7 @@ impl JobExecutor {
             name: job_config.name.clone().unwrap_or_else(|| format!("{job_name}-matrix")), // TODO: Improve matrix job naming to reflect matrix values
             status: JobStatus::Queued,
             workflow: workflow_name.to_string(),
-            repository: "unknown".to_string(), // TODO: Properly populate repository field from context
+            repository: repository.to_string(), // DONE: Properly populate repository field from context
             started_at: None,
             completed_at: None,
             steps,
@@ -307,6 +308,7 @@ impl JobExecutor {
         job_name: &str,
         job_config: &WorkflowJob,
         workflow_name: &str,
+        repository: &str,
     ) -> Result<Job> {
         let mut steps = Vec::new();
 
@@ -326,7 +328,7 @@ impl JobExecutor {
             name: job_config.name.clone().unwrap_or_else(|| job_name.to_string()),
             status: JobStatus::Queued,
             workflow: workflow_name.to_string(),
-            repository: "unknown".to_string(), // This would come from the context
+            repository: repository.to_string(),
             started_at: None,
             completed_at: None,
             steps,
@@ -571,5 +573,30 @@ jobs:
         let result = executor.execute_job(job).await;
         // Should return an error but not panic
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_job_repository_field_is_set() {
+        let job_config = WorkflowJob {
+            name: Some("test-job".to_string()),
+            runs_on: "ubuntu-latest".to_string(),
+            steps: vec![WorkflowStep {
+                name: "step1".to_string(),
+                run: Some("echo hello".to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let core = RunnerCore::new(crate::config::BarefootConfig::default());
+        let executor = JobExecutor::new(core);
+        let repository = "my-repo";
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let job = rt.block_on(executor.create_job_from_workflow_job(
+            "test-job",
+            &job_config,
+            "test-workflow",
+            repository,
+        )).unwrap();
+        assert_eq!(job.repository, repository);
     }
 } 
