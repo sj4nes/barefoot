@@ -190,6 +190,7 @@ async fn run_foreground(
             }
             Err(e) => {
                 error!("Failed to get jobs: {}", e);
+                // TODO: Add exponential backoff or smarter error handling for job polling failures
             }
         }
 
@@ -257,6 +258,7 @@ async fn run_daemon(
                         }
                         Err(e) => {
                             error!("Failed to get jobs: {}", e);
+                            // TODO: Add exponential backoff or smarter error handling for job polling failures
                         }
                     }
                 }
@@ -401,6 +403,7 @@ async fn show_status() -> Result<()> {
     }
     
     if !status_found {
+        // TODO: Implement real status reporting (active jobs, queue size, etc.)
         println!("Barefoot Runner Status: (stub)\n- Status: Unknown\n- Current jobs: N/A\n- Queue size: N/A");
     }
     

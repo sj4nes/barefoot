@@ -108,6 +108,7 @@ impl JobExecutor {
                 self.execute_toolchain_action(&version).await?;
             }
             _ => {
+                // TODO: Support more GitHub Actions and custom actions
                 return Err(crate::error::BarefootError::Workflow(
                     format!("Unsupported action: {action_name}")
                 ));
@@ -288,10 +289,10 @@ impl JobExecutor {
 
         let job = Job {
             id: Uuid::new_v4(),
-            name: job_config.name.clone().unwrap_or_else(|| format!("{job_name}-matrix")),
+            name: job_config.name.clone().unwrap_or_else(|| format!("{job_name}-matrix")), // TODO: Improve matrix job naming to reflect matrix values
             status: JobStatus::Queued,
             workflow: workflow_name.to_string(),
-            repository: "unknown".to_string(), // This would come from the context
+            repository: "unknown".to_string(), // TODO: Properly populate repository field from context
             started_at: None,
             completed_at: None,
             steps,

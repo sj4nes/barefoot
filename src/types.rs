@@ -46,7 +46,7 @@ pub struct RunnerCapabilities {
 pub struct DiskUsageReport {
     pub total_bytes: u64,
     pub used_bytes: u64,
-    pub details: Option<String>,
+    pub details: Option<String>, // TODO: Expand disk usage reporting details
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
