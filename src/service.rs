@@ -28,7 +28,7 @@ pub trait ServiceClient: Send + Sync {
 pub struct GitHubClient {
     client: Client,
     base_url: String,
-    token: String,
+    _token: String,
 }
 
 impl GitHubClient {
@@ -49,7 +49,7 @@ impl GitHubClient {
         Self {
             client,
             base_url: config.service.url,
-            token: config.service.token,
+            _token: config.service.token,
         }
     }
 }
@@ -154,7 +154,7 @@ impl ServiceClient for GitHubClient {
 pub struct JujutsuClient {
     client: Client,
     base_url: String,
-    token: String,
+    _token: String,
 }
 
 impl JujutsuClient {
@@ -175,7 +175,7 @@ impl JujutsuClient {
         Self {
             client,
             base_url: config.service.url,
-            token: config.service.token,
+            _token: config.service.token,
         }
     }
 }

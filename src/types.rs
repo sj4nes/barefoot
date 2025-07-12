@@ -152,8 +152,8 @@ pub struct Job {
 pub struct JobStep {
     pub name: String,
     pub status: JobStatus,
-    pub output: Option<String>,
-    pub error: Option<String>,
+    pub run: Option<String>,
+    pub uses: Option<String>,
     pub duration: Option<chrono::Duration>,
 }
 
@@ -161,22 +161,34 @@ pub struct JobStep {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorkflowStep {
     pub name: String,
+    #[serde(default)]
     pub run: Option<String>,
+    #[serde(default)]
     pub uses: Option<String>,
+    #[serde(default)]
     pub with: HashMap<String, serde_json::Value>,
+    #[serde(default)]
     pub env: HashMap<String, String>,
+    #[serde(default)]
     pub shell: Option<String>,
+    #[serde(default)]
     pub working_directory: Option<String>,
 }
 
 /// Workflow job
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorkflowJob {
-    pub name: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(rename = "runs-on")]
     pub runs_on: String,
+    #[serde(default)]
     pub steps: Vec<WorkflowStep>,
+    #[serde(default)]
     pub env: HashMap<String, String>,
+    #[serde(default)]
     pub timeout_minutes: Option<u32>,
+    #[serde(default)]
     pub strategy: Option<JobStrategy>,
 }
 
@@ -184,7 +196,9 @@ pub struct WorkflowJob {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct JobStrategy {
     pub matrix: HashMap<String, Vec<serde_json::Value>>,
+    #[serde(rename = "fail-fast")]
     pub fail_fast: Option<bool>,
+    #[serde(rename = "max-parallel")]
     pub max_parallel: Option<usize>,
 }
 
@@ -192,31 +206,42 @@ pub struct JobStrategy {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Workflow {
     pub name: String,
+    #[serde(default)]
     pub on: WorkflowTriggers,
+    #[serde(default)]
     pub jobs: HashMap<String, WorkflowJob>,
+    #[serde(default)]
     pub env: HashMap<String, String>,
 }
 
 /// Workflow triggers
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WorkflowTriggers {
+    #[serde(default)]
     pub push: Option<PushTrigger>,
+    #[serde(default)]
     pub pull_request: Option<PullRequestTrigger>,
+    #[serde(default)]
     pub schedule: Option<Vec<ScheduleTrigger>>,
+    #[serde(default)]
     pub workflow_dispatch: Option<bool>,
 }
 
 /// Push trigger
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PushTrigger {
+    #[serde(default)]
     pub branches: Option<Vec<String>>,
+    #[serde(default)]
     pub paths: Option<Vec<String>>,
 }
 
 /// Pull request trigger
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PullRequestTrigger {
+    #[serde(default)]
     pub branches: Option<Vec<String>>,
+    #[serde(default)]
     pub paths: Option<Vec<String>>,
 }
 
