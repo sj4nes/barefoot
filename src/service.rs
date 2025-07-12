@@ -454,7 +454,7 @@ impl ServiceClientFactory {
                 Ok(Box::new(JujutsuClient::new(config)))
             }
             _ => {
-                // TODO: Add support for additional service types
+                // TODO: Add support for additional service types (Forgejo, Codeberg, Sourcehut, Gitea)
                 Err(BarefootError::ServiceNotFound(
                     format!("Service type {:?} not supported", config.service.service_type)
                 ))

@@ -263,8 +263,11 @@ pub struct ScheduleTrigger {
 pub enum ServiceType {
     #[default]
     GitHub,
-    GitLab,
-    Gitea,
+    GitLab, // TODO: Implement GitLab service client
+    Gitea, // TODO: Implement Gitea service client
+    Forgejo, // TODO: Implement Forgejo service client (Gitea fork)
+    Codeberg, // TODO: Implement Codeberg service client (Gitea-based)
+    Sourcehut, // TODO: Implement Sourcehut service client
     Jujutsu,
     Custom,
 }

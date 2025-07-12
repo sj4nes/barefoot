@@ -492,8 +492,11 @@ async fn configure_runner(
     if let Some(service_type) = service_type {
         config.service.service_type = match service_type.as_str() {
             "github" => barefoot::types::ServiceType::GitHub,
-            "gitlab" => barefoot::types::ServiceType::GitLab,
-            "gitea" => barefoot::types::ServiceType::Gitea,
+            "gitlab" => barefoot::types::ServiceType::GitLab, // TODO: Implement GitLab support
+            "gitea" => barefoot::types::ServiceType::Gitea, // TODO: Implement Gitea support
+            "forgejo" => barefoot::types::ServiceType::Forgejo, // TODO: Implement Forgejo support
+            "codeberg" => barefoot::types::ServiceType::Codeberg, // TODO: Implement Codeberg support
+            "sourcehut" => barefoot::types::ServiceType::Sourcehut, // TODO: Implement Sourcehut support
             "jujutsu" => barefoot::types::ServiceType::Jujutsu,
             _ => barefoot::types::ServiceType::Custom,
         };

@@ -98,8 +98,11 @@ barefoot stop
 The runner supports multiple service types through a trait-based architecture:
 
 - **GitHub**: Full GitHub Actions compatibility
-- **GitLab**: GitLab CI/CD integration
-- **Gitea**: Gitea Actions support
+- **GitLab**: GitLab CI/CD integration (TODO: Implement)
+- **Gitea**: Gitea Actions support (TODO: Implement)
+- **Forgejo**: Forgejo Actions support (TODO: Implement - Gitea fork)
+- **Codeberg**: Codeberg Actions support (TODO: Implement - Gitea-based)
+- **Sourcehut**: Sourcehut builds support (TODO: Implement)
 - **Jujutsu**: Native Jujutsu integration
 - **Custom**: Extensible for other services
 
