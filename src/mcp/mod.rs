@@ -36,6 +36,8 @@ pub enum TransportType {
     Tcp { host: String, port: u16 },
     /// WebSocket
     WebSocket { host: String, port: u16 },
+    /// HTTP
+    Http { host: String, port: u16 },
 }
 
 /// Authentication configuration

@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::types::{RunnerConfig, ServiceConfig, ServiceType, RunnerCapabilities, ContainerCleanupConfig};
+use crate::mcp::McpConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -11,6 +12,7 @@ pub struct BarefootConfig {
     pub service: ServiceConfig,
     pub logging: LoggingConfig,
     pub security: SecurityConfig,
+    pub mcp: McpConfig,
 }
 
 /// Differential logging configuration
@@ -82,6 +84,7 @@ impl Default for BarefootConfig {
                 allowed_origins: vec!["*".to_string()],
                 max_upload_size: 100 * 1024 * 1024, // 100MB
             },
+            mcp: McpConfig::default(),
         }
     }
 }

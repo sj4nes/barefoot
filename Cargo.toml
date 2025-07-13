@@ -37,8 +37,12 @@ nix = { version = "0.30", features = ["signal", "process"] }
 notify = "6.1"
 tempfile = "3.0"
 plotters = "0.3"
+svg = "0.13"
 base64 = "0.21"
 futures = "0.3"
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
 
 [dev-dependencies]
 tokio-test = "0.4"

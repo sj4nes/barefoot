@@ -146,6 +146,19 @@ pub enum JobStatus {
     Skipped,
 }
 
+impl fmt::Display for JobStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JobStatus::Queued => write!(f, "Queued"),
+            JobStatus::Running => write!(f, "Running"),
+            JobStatus::Completed => write!(f, "Completed"),
+            JobStatus::Failed => write!(f, "Failed"),
+            JobStatus::Cancelled => write!(f, "Cancelled"),
+            JobStatus::Skipped => write!(f, "Skipped"),
+        }
+    }
+}
+
 /// Job information
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Job {

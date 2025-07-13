@@ -1,4 +1,5 @@
 use barefoot::{config::BarefootConfig, core::RunnerCore, runner::JobExecutor, service::ServiceClientFactory, Result, VERSION, BarefootError};
+use barefoot::mcp::{TransportType, McpFeatures, server, McpConfig};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing::{error, info, warn};
@@ -60,6 +61,22 @@ enum Commands {
         /// Run in foreground (don't daemonize)
         #[arg(short, long)]
         foreground: bool,
+        
+        /// Enable MCP server
+        #[arg(long)]
+        enable_mcp: bool,
+        
+        /// MCP transport type (stdio, tcp, websocket)
+        #[arg(long, default_value = "stdio")]
+        mcp_transport: String,
+        
+        /// MCP TCP host (for tcp/websocket transport)
+        #[arg(long)]
+        mcp_host: Option<String>,
+        
+        /// MCP TCP port (for tcp/websocket transport)
+        #[arg(long)]
+        mcp_port: Option<u16>,
     },
     
     /// Stop the runner
@@ -120,29 +137,81 @@ enum Commands {
     
     /// Test configuration
     Test,
+    
+    /// MCP server commands
+    Mcp {
+        #[command(subcommand)]
+        command: McpCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum McpCommands {
+    /// Start MCP server
+    Start {
+        /// Transport type (stdio, tcp, websocket, http)
+        #[arg(long, default_value = "stdio")]
+        transport: String,
+        
+        /// TCP/HTTP host (for tcp/websocket/http transport)
+        #[arg(long)]
+        host: Option<String>,
+        
+        /// TCP/HTTP port (for tcp/websocket/http transport)
+        #[arg(long)]
+        port: Option<u16>,
+        
+        /// Enable streaming
+        #[arg(long)]
+        streaming: bool,
+        
+        /// Enable real-time updates
+        #[arg(long)]
+        realtime: bool,
+        
+        /// Enable prompt templates
+        #[arg(long)]
+        prompts: bool,
+    },
+    
+    /// List available MCP tools
+    Tools,
+    
+    /// List available MCP resources
+    Resources,
+    
+    /// Show MCP server status
+    Status,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Initialize logging
-    tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::new(format!("barefoot={}", cli.log_level)))
-        .with_target(false)
-        .with_thread_ids(true)
-        .with_thread_names(true)
-        .with_file(true)
-        .with_line_number(true)
-        .with_ansi(true)
-        .pretty()
-        .init();
+    // Only initialize logging if not running 'mcp start'
+    let is_mcp_start = matches!(
+        &cli.command,
+        Commands::Mcp { command: McpCommands::Start { .. } }
+    );
+    if !is_mcp_start {
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_env_filter(tracing_subscriber::EnvFilter::new(format!("barefoot={}", cli.log_level)))
+            .with_target(false)
+            .with_thread_ids(true)
+            .with_thread_names(true)
+            .with_file(true)
+            .with_line_number(true)
+            .with_ansi(true)
+            .with_writer(std::io::stderr)
+            .pretty()
+            .init();
+    }
 
     info!("Barefoot runner starting, version: {}", VERSION);
 
     match cli.command {
-        Commands::Start { foreground } => {
-            start_runner(&cli.config, foreground).await?;
+        Commands::Start { foreground, enable_mcp, mcp_transport, mcp_host, mcp_port } => {
+            start_runner(&cli.config, foreground, enable_mcp, mcp_transport, mcp_host, mcp_port).await?;
         }
         Commands::Stop => {
             stop_runner().await?;
@@ -159,12 +228,28 @@ async fn main() -> Result<()> {
         Commands::Test => {
             test_configuration(&cli.config).await?;
         }
+        Commands::Mcp { command } => {
+            match command {
+                McpCommands::Start { transport, host, port, streaming, realtime, prompts } => {
+                    start_mcp_server(transport, host, port, streaming, realtime, prompts).await?;
+                }
+                McpCommands::Tools => {
+                    show_mcp_tools().await?;
+                }
+                McpCommands::Resources => {
+                    show_mcp_resources().await?;
+                }
+                McpCommands::Status => {
+                    show_mcp_status().await?;
+                }
+            }
+        }
     }
 
     Ok(())
 }
 
-async fn start_runner(config_path: &PathBuf, foreground: bool) -> Result<()> {
+async fn start_runner(config_path: &PathBuf, foreground: bool, enable_mcp: bool, _mcp_transport: String, _mcp_host: Option<String>, _mcp_port: Option<u16>) -> Result<()> {
     info!("Loading configuration from: {:?}", config_path);
     
     // Load configuration
@@ -193,6 +278,20 @@ async fn start_runner(config_path: &PathBuf, foreground: bool) -> Result<()> {
 
     // Create job executor
     let executor = JobExecutor::new(core);
+
+    // Start MCP server if enabled
+    if enable_mcp {
+        info!("Starting MCP server");
+        let mcp_config = config.mcp.clone();
+        let mut mcp_server = server::BarefootMcpServer::new(mcp_config);
+        
+        // Start MCP server in background
+        tokio::spawn(async move {
+            if let Err(e) = mcp_server.start().await {
+                error!("MCP server failed to start: {}", e);
+            }
+        });
+    }
 
     if foreground {
         info!("Running in foreground mode");
@@ -782,6 +881,119 @@ async fn test_configuration(config_path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+async fn start_mcp_server(transport: String, host: Option<String>, port: Option<u16>, streaming: bool, realtime: bool, prompts: bool) -> Result<()> {
+    let mut features = McpFeatures::default();
+    features.streaming = streaming;
+    features.realtime = realtime;
+    features.prompts = prompts;
+
+    let transport_type = match transport.as_str() {
+        "stdio" => TransportType::Stdio,
+        "tcp" => {
+            let host = host.unwrap_or_else(|| "127.0.0.1".to_string());
+            let port = port.unwrap_or(8080);
+            TransportType::Tcp { host, port }
+        }
+        "websocket" => {
+            let host = host.unwrap_or_else(|| "127.0.0.1".to_string());
+            let port = port.unwrap_or(8081);
+            TransportType::WebSocket { host, port }
+        }
+        "http" => {
+            let host = host.unwrap_or_else(|| "127.0.0.1".to_string());
+            let port = port.unwrap_or(8080);
+            TransportType::Http { host, port }
+        }
+        _ => return Err(BarefootError::Mcp(format!("Unsupported transport type: {}", transport))),
+    };
+
+    let config = McpConfig {
+        transport: transport_type.clone(),
+        features,
+        ..Default::default()
+    };
+
+    let mut server = server::BarefootMcpServer::new(config);
+    
+    info!("MCP server starting with transport: {:?}", transport_type);
+    
+    // Start the server based on transport type
+    match transport_type {
+        TransportType::Http { host, port } => {
+            server.start_http(&host, port).await?;
+        }
+        _ => {
+            // For other transport types, use the existing start method
+            server.start().await?;
+        }
+    }
+    
+    info!("MCP server stopped");
+    Ok(())
+}
+
+async fn show_mcp_tools() -> Result<()> {
+    let config = McpConfig::default();
+    let server = server::BarefootMcpServer::new(config);
+    
+    match server.list_tools().await {
+        Ok(tools) => {
+            println!("Available MCP Tools:");
+            for tool in tools {
+                println!("  - {}: {}", tool.name, tool.description);
+                println!("    Permissions: {:?}", tool.permissions);
+            }
+        }
+        Err(e) => {
+            println!("Error listing MCP tools: {}", e);
+        }
+    }
+    Ok(())
+}
+
+async fn show_mcp_resources() -> Result<()> {
+    let config = McpConfig::default();
+    let server = server::BarefootMcpServer::new(config);
+    
+    match server.list_resources().await {
+        Ok(resources) => {
+            println!("Available MCP Resources:");
+            for resource in resources {
+                println!("  - {}: {}", resource.title, resource.description);
+                println!("    URI: {}", resource.uri);
+                println!("    MIME Type: {}", resource.mime_type);
+            }
+        }
+        Err(e) => {
+            println!("Error listing MCP resources: {}", e);
+        }
+    }
+    Ok(())
+}
+
+async fn show_mcp_status() -> Result<()> {
+    let config = McpConfig::default();
+    let server = server::BarefootMcpServer::new(config);
+    
+    match server.status().await {
+        Ok(status) => {
+            println!("MCP Server Status:");
+            println!("- Running: {}", status.running);
+            println!("- Connections: {}", status.connections);
+            println!("- Uptime: {:?}", status.uptime);
+            println!("- Resource count: {}", status.resource_count);
+            println!("- Tool count: {}", status.tool_count);
+            if let Some(error) = status.last_error {
+                println!("- Last error: {}", error);
+            }
+        }
+        Err(e) => {
+            println!("Error getting MCP server status: {}", e);
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -823,7 +1035,7 @@ max_upload_size = 1000000
         std::fs::write(&config_path, config_content).unwrap();
         
         // Test that daemon mode can be started (even if not fully implemented)
-        let result = start_runner(&config_path, false).await;
+        let result = start_runner(&config_path, false, false, "stdio".to_string(), None, None).await;
         // Should not panic, even if daemon mode is not fully implemented
         assert!(result.is_ok() || result.is_err()); // Accept either outcome for now
     }
@@ -864,7 +1076,7 @@ max_upload_size = 1000000
         std::fs::write(&config_path, config_content).unwrap();
         
         // Test that foreground mode can be started
-        let result = start_runner(&config_path, true).await;
+        let result = start_runner(&config_path, true, false, "stdio".to_string(), None, None).await;
         // Should not panic
         assert!(result.is_ok() || result.is_err()); // Accept either outcome for now
     }
@@ -876,7 +1088,7 @@ max_upload_size = 1000000
         let cli = Cli::try_parse_from(args).unwrap();
         
         match cli.command {
-            Commands::Start { foreground } => {
+            Commands::Start { foreground, .. } => {
                 assert!(foreground);
             }
             _ => panic!("Expected Start command"),

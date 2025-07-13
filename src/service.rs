@@ -496,7 +496,7 @@ impl ServiceClient for JujutsuClient {
     }
 }
 
-/// Service client factory
+/// Factory for creating service clients
 #[derive(Clone)]
 pub struct ServiceClientFactory;
 

@@ -56,6 +56,12 @@ pub enum BarefootError {
     Anyhow(#[from] anyhow::Error),
 }
 
+impl From<std::net::AddrParseError> for BarefootError {
+    fn from(err: std::net::AddrParseError) -> Self {
+        BarefootError::Mcp(format!("Invalid address: {}", err))
+    }
+}
+
 /// Result type for the barefoot runner
 pub type Result<T> = std::result::Result<T, BarefootError>; 
 

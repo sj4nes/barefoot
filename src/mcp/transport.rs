@@ -6,6 +6,7 @@ use tokio::io::AsyncWriteExt;
 use serde_json::Value;
 use crate::error::Result;
 use std::pin::Pin;
+use std::sync::Arc;
 
 /// Transport trait for MCP communication
 pub trait Transport: Send + Sync {
@@ -208,6 +209,56 @@ impl Transport for WebSocketTransport {
     }
 }
 
+/// HTTP transport for MCP server
+pub struct HttpTransport {
+    host: String,
+    port: u16,
+    server: Option<Arc<server::BarefootMcpServer>>,
+}
+
+impl HttpTransport {
+    pub fn new(host: String, port: u16) -> Self {
+        Self {
+            host,
+            port,
+            server: None,
+        }
+    }
+
+    pub fn with_server(mut self, server: Arc<server::BarefootMcpServer>) -> Self {
+        self.server = Some(server);
+        self
+    }
+}
+
+impl Transport for HttpTransport {
+    fn start(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            // HTTP transport is handled differently - it's started in the server itself
+            Ok(())
+        })
+    }
+
+    fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            // HTTP transport cleanup would go here
+            Ok(())
+        })
+    }
+
+    fn is_running(&self) -> bool {
+        // For now, assume HTTP is always running if server is set
+        self.server.is_some()
+    }
+
+    fn transport_type(&self) -> TransportType {
+        TransportType::Http {
+            host: self.host.clone(),
+            port: self.port,
+        }
+    }
+}
+
 /// Transport factory for creating different transport types
 pub struct TransportFactory;
 
@@ -227,6 +278,10 @@ impl TransportFactory {
                 let transport = WebSocketTransport::new(host, port).with_server(server);
                 Ok(TransportEnum::WebSocket(transport))
             }
+            TransportType::Http { host, port } => {
+                let transport = HttpTransport::new(host, port).with_server(Arc::new(server));
+                Ok(TransportEnum::Http(transport))
+            }
         }
     }
 }
@@ -236,6 +291,7 @@ pub enum TransportEnum {
     Stdio(StdioTransport),
     Tcp(TcpTransport),
     WebSocket(WebSocketTransport),
+    Http(HttpTransport),
 }
 
 impl Transport for TransportEnum {
@@ -244,6 +300,7 @@ impl Transport for TransportEnum {
             TransportEnum::Stdio(transport) => transport.start(),
             TransportEnum::Tcp(transport) => transport.start(),
             TransportEnum::WebSocket(transport) => transport.start(),
+            TransportEnum::Http(transport) => transport.start(),
         }
     }
     
@@ -252,6 +309,7 @@ impl Transport for TransportEnum {
             TransportEnum::Stdio(transport) => transport.stop(),
             TransportEnum::Tcp(transport) => transport.stop(),
             TransportEnum::WebSocket(transport) => transport.stop(),
+            TransportEnum::Http(transport) => transport.stop(),
         }
     }
     
@@ -260,6 +318,7 @@ impl Transport for TransportEnum {
             TransportEnum::Stdio(transport) => transport.is_running(),
             TransportEnum::Tcp(transport) => transport.is_running(),
             TransportEnum::WebSocket(transport) => transport.is_running(),
+            TransportEnum::Http(transport) => transport.is_running(),
         }
     }
     
@@ -268,6 +327,7 @@ impl Transport for TransportEnum {
             TransportEnum::Stdio(transport) => transport.transport_type(),
             TransportEnum::Tcp(transport) => transport.transport_type(),
             TransportEnum::WebSocket(transport) => transport.transport_type(),
+            TransportEnum::Http(transport) => transport.transport_type(),
         }
     }
 }

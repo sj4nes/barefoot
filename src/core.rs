@@ -8,9 +8,10 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 use std::collections::VecDeque;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 /// Job run record for differential logging
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct JobRunRecord {
     pub job_id: Uuid,
     pub job_name: String,
