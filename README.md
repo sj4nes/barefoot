@@ -2,6 +2,11 @@
 
 A modern, flexible runner system for GitHub-like services and Jujutsu. Built in Rust for performance, reliability, and cross-platform compatibility.
 
+## Development Status
+
+- Currently focusing on Jujutsu service support for local actions.
+- MCP server for interfacing with the barefoot runner.
+
 ## Features
 
 - **Multi-service support**: Works with GitHub, GitLab, Gitea, and Jujutsu

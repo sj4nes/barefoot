@@ -31,11 +31,11 @@
 pub mod config;
 pub mod core;
 pub mod error;
+pub mod mcp;
 pub mod runner;
 pub mod service;
 pub mod types;
 pub mod utils;
-pub mod mcp;
 
 pub use error::{BarefootError, Result};
 
@@ -47,4 +47,4 @@ pub async fn init() -> Result<()> {
     tracing_subscriber::fmt::init();
     tracing::info!("Barefoot runner initialized, version: {}", VERSION);
     Ok(())
-} 
+}

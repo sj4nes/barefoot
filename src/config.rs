@@ -1,6 +1,8 @@
 use crate::error::Result;
-use crate::types::{RunnerConfig, ServiceConfig, ServiceType, RunnerCapabilities, ContainerCleanupConfig};
 use crate::mcp::McpConfig;
+use crate::types::{
+    ContainerCleanupConfig, RunnerCapabilities, RunnerConfig, ServiceConfig, ServiceType,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -29,6 +31,15 @@ pub struct LoggingConfig {
     pub format: String,
     pub file: Option<String>,
     pub differential_logging: DifferentialLoggingConfig,
+    pub log_truncation: LogTruncationConfig,
+}
+
+/// Log truncation configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogTruncationConfig {
+    pub enabled: bool,
+    pub first_lines: usize,
+    pub last_lines: usize,
 }
 
 /// Security configuration
@@ -77,6 +88,11 @@ impl Default for BarefootConfig {
                 differential_logging: DifferentialLoggingConfig {
                     enabled: true,
                     max_job_runs: 25,
+                },
+                log_truncation: LogTruncationConfig {
+                    enabled: true,
+                    first_lines: 3,
+                    last_lines: 5,
                 },
             },
             security: SecurityConfig {
@@ -160,4 +176,4 @@ impl BarefootConfig {
     pub fn service_url(&self) -> &str {
         &self.service.url
     }
-} 
+}

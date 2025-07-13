@@ -1,18 +1,18 @@
 //! MCP (Model Context Protocol) integration for barefoot runner
-//! 
+//!
 //! This module provides integration with the Model Context Protocol,
 //! allowing AI agents to interact with the barefoot runner system.
 
-pub mod server;
-pub mod resources;
-pub mod tools;
 pub mod prompts;
+pub mod resources;
+pub mod server;
+pub mod tools;
 pub mod transport;
 
+use crate::error::Result;
 use crate::BarefootError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::error::Result;
 
 /// MCP configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -212,28 +212,28 @@ pub struct ServerStatus {
 pub enum McpError {
     #[error("MCP server error: {0}")]
     Server(String),
-    
+
     #[error("Resource not found: {0}")]
     ResourceNotFound(String),
-    
+
     #[error("Tool not found: {0}")]
     ToolNotFound(String),
-    
+
     #[error("Invalid tool arguments: {0}")]
     InvalidArguments(String),
-    
+
     #[error("Authentication failed: {0}")]
     Authentication(String),
-    
+
     #[error("Authorization failed: {0}")]
     Authorization(String),
-    
+
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
-    
+
     #[error("Request timeout")]
     RequestTimeout,
-    
+
     #[error("Transport error: {0}")]
     Transport(String),
 }
@@ -256,31 +256,31 @@ impl McpServerBuilder {
             config: McpConfig::default(),
         }
     }
-    
+
     /// Set transport type
     pub fn transport(mut self, transport: TransportType) -> Self {
         self.config.transport = transport;
         self
     }
-    
+
     /// Enable authentication
     pub fn auth(mut self, auth: AuthConfig) -> Self {
         self.config.auth = auth;
         self
     }
-    
+
     /// Set resource limits
     pub fn limits(mut self, limits: ResourceLimits) -> Self {
         self.config.limits = limits;
         self
     }
-    
+
     /// Enable features
     pub fn features(mut self, features: McpFeatures) -> Self {
         self.config.features = features;
         self
     }
-    
+
     /// Build the MCP server
     pub fn build(self) -> Result<server::BarefootMcpServer> {
         Ok(server::BarefootMcpServer::new(self.config))
@@ -296,7 +296,7 @@ impl Default for McpServerBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_mcp_config_default() {
         let config = McpConfig::default();
@@ -304,7 +304,7 @@ mod tests {
         assert_eq!(config.limits.max_connections, 10);
         assert!(config.features.streaming);
     }
-    
+
     #[test]
     fn test_mcp_server_builder() {
         let builder = McpServerBuilder::new()
@@ -315,8 +315,8 @@ mod tests {
                 sampling: false,
                 prompts: true,
             });
-        
+
         assert_eq!(builder.config.transport, TransportType::Stdio);
         assert!(builder.config.features.streaming);
     }
-} 
+}

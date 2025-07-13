@@ -1,8 +1,8 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 /// Runner status
 ///
@@ -288,10 +288,10 @@ pub struct ScheduleTrigger {
 pub enum ServiceType {
     #[default]
     GitHub,
-    GitLab, // TODO: Implement GitLab service client
-    Gitea, // TODO: Implement Gitea service client
-    Forgejo, // TODO: Implement Forgejo service client (Gitea fork)
-    Codeberg, // TODO: Implement Codeberg service client (Gitea-based)
+    GitLab,    // TODO: Implement GitLab service client
+    Gitea,     // TODO: Implement Gitea service client
+    Forgejo,   // TODO: Implement Forgejo service client (Gitea fork)
+    Codeberg,  // TODO: Implement Codeberg service client (Gitea-based)
     Sourcehut, // TODO: Implement Sourcehut service client
     Jujutsu,
     Custom,
@@ -310,9 +310,9 @@ pub struct ServiceConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
     use serde_json;
     use uuid::Uuid;
-    use chrono::Utc;
 
     #[test]
     fn test_runner_status_serde() {
@@ -355,4 +355,4 @@ mod tests {
         assert_eq!(job.name, d.name);
         assert_eq!(job.status, d.status);
     }
-} 
+}

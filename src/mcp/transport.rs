@@ -1,24 +1,24 @@
 //! MCP transport implementations for barefoot runner
 
 use super::*;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::io::AsyncWriteExt;
-use serde_json::Value;
 use crate::error::Result;
+use serde_json::Value;
 use std::pin::Pin;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
+use tokio::net::{TcpListener, TcpStream};
 
 /// Transport trait for MCP communication
 pub trait Transport: Send + Sync {
     /// Start the transport
     fn start(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>>;
-    
+
     /// Stop the transport
     fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>>;
-    
+
     /// Check if transport is running
     fn is_running(&self) -> bool;
-    
+
     /// Get transport type
     fn transport_type(&self) -> TransportType;
 }
@@ -36,7 +36,7 @@ impl StdioTransport {
             server: None,
         }
     }
-    
+
     pub fn with_server(mut self, server: server::BarefootMcpServer) -> Self {
         self.server = Some(server);
         self
@@ -48,15 +48,15 @@ impl Transport for StdioTransport {
         Box::pin(async move {
             self.running = true;
             tracing::info!("MCP stdio transport started");
-            
+
             // TODO: Implement stdio-based MCP protocol
             // This would involve reading from stdin and writing to stdout
             // following the MCP protocol specification
-            
+
             Ok(())
         })
     }
-    
+
     fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async move {
             self.running = false;
@@ -64,11 +64,11 @@ impl Transport for StdioTransport {
             Ok(())
         })
     }
-    
+
     fn is_running(&self) -> bool {
         self.running
     }
-    
+
     fn transport_type(&self) -> TransportType {
         TransportType::Stdio
     }
@@ -93,23 +93,25 @@ impl TcpTransport {
             server: None,
         }
     }
-    
+
     pub fn with_server(mut self, server: server::BarefootMcpServer) -> Self {
         self.server = Some(server);
         self
     }
-    
+
     async fn handle_connection(&self, stream: TcpStream) -> Result<()> {
         let (_read, mut write) = stream.into_split();
-        
+
         // TODO: Implement MCP protocol over TCP
         // This would involve parsing JSON-RPC messages and handling MCP requests
-        
+
         tracing::info!("TCP connection established");
-        
+
         // For now, just log the connection
-        let _ = write.write_all(b"{\"jsonrpc\": \"2.0\", \"method\": \"initialize\", \"params\": {}}\n").await;
-        
+        let _ = write
+            .write_all(b"{\"jsonrpc\": \"2.0\", \"method\": \"initialize\", \"params\": {}}\n")
+            .await;
+
         Ok(())
     }
 }
@@ -122,19 +124,22 @@ impl Transport for TcpTransport {
             if self.running {
                 return Ok(());
             }
-            
-            let listener = TcpListener::bind(format!("{}:{}", host, port)).await
-                .map_err(|e| BarefootError::Mcp(format!("Failed to bind to {}:{}: {}", host, port, e)))?;
-            
+
+            let listener = TcpListener::bind(format!("{}:{}", host, port))
+                .await
+                .map_err(|e| {
+                    BarefootError::Mcp(format!("Failed to bind to {}:{}: {}", host, port, e))
+                })?;
+
             self.running = true;
             self.listener = Some(listener);
-            
+
             tracing::info!("MCP TCP transport started on {}:{}", host, port);
-            
+
             Ok(())
         })
     }
-    
+
     fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async move {
             self.running = false;
@@ -143,13 +148,16 @@ impl Transport for TcpTransport {
             Ok(())
         })
     }
-    
+
     fn is_running(&self) -> bool {
         self.running
     }
-    
+
     fn transport_type(&self) -> TransportType {
-        TransportType::Tcp { host: self.host.clone(), port: self.port }
+        TransportType::Tcp {
+            host: self.host.clone(),
+            port: self.port,
+        }
     }
 }
 
@@ -170,7 +178,7 @@ impl WebSocketTransport {
             server: None,
         }
     }
-    
+
     pub fn with_server(mut self, server: server::BarefootMcpServer) -> Self {
         self.server = Some(server);
         self
@@ -184,14 +192,14 @@ impl Transport for WebSocketTransport {
         Box::pin(async move {
             self.running = true;
             tracing::info!("MCP WebSocket transport started on {}:{}", host, port);
-            
+
             // TODO: Implement WebSocket-based MCP protocol
             // This would involve using a WebSocket library like tokio-tungstenite
-            
+
             Ok(())
         })
     }
-    
+
     fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async move {
             self.running = false;
@@ -199,13 +207,16 @@ impl Transport for WebSocketTransport {
             Ok(())
         })
     }
-    
+
     fn is_running(&self) -> bool {
         self.running
     }
-    
+
     fn transport_type(&self) -> TransportType {
-        TransportType::WebSocket { host: self.host.clone(), port: self.port }
+        TransportType::WebSocket {
+            host: self.host.clone(),
+            port: self.port,
+        }
     }
 }
 
@@ -264,7 +275,10 @@ pub struct TransportFactory;
 
 impl TransportFactory {
     /// Create a transport based on type and server
-    pub fn create(transport_type: TransportType, server: server::BarefootMcpServer) -> Result<TransportEnum> {
+    pub fn create(
+        transport_type: TransportType,
+        server: server::BarefootMcpServer,
+    ) -> Result<TransportEnum> {
         match transport_type {
             TransportType::Stdio => {
                 let transport = StdioTransport::new().with_server(server);
@@ -303,7 +317,7 @@ impl Transport for TransportEnum {
             TransportEnum::Http(transport) => transport.start(),
         }
     }
-    
+
     fn stop(&mut self) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
         match self {
             TransportEnum::Stdio(transport) => transport.stop(),
@@ -312,7 +326,7 @@ impl Transport for TransportEnum {
             TransportEnum::Http(transport) => transport.stop(),
         }
     }
-    
+
     fn is_running(&self) -> bool {
         match self {
             TransportEnum::Stdio(transport) => transport.is_running(),
@@ -321,7 +335,7 @@ impl Transport for TransportEnum {
             TransportEnum::Http(transport) => transport.is_running(),
         }
     }
-    
+
     fn transport_type(&self) -> TransportType {
         match self {
             TransportEnum::Stdio(transport) => transport.transport_type(),
@@ -360,7 +374,7 @@ impl McpProtocolHandler {
     pub fn new(server: server::BarefootMcpServer) -> Self {
         Self { server }
     }
-    
+
     pub async fn handle_message(&self, message: McpMessage) -> Result<McpMessage> {
         match message.method.as_deref() {
             Some("initialize") => self.handle_initialize(message).await,
@@ -373,7 +387,7 @@ impl McpProtocolHandler {
             _ => Err(BarefootError::Mcp("Unknown method".to_string())),
         }
     }
-    
+
     async fn handle_initialize(&self, message: McpMessage) -> Result<McpMessage> {
         // TODO: Implement proper initialization
         Ok(McpMessage {
@@ -392,7 +406,7 @@ impl McpProtocolHandler {
             error: None,
         })
     }
-    
+
     async fn handle_list_resources(&self, message: McpMessage) -> Result<McpMessage> {
         let resources = self.server.list_resources().await?;
         Ok(McpMessage {
@@ -404,13 +418,14 @@ impl McpProtocolHandler {
             error: None,
         })
     }
-    
+
     async fn handle_read_resource(&self, message: McpMessage) -> Result<McpMessage> {
-        let uri = message.params
+        let uri = message
+            .params
             .and_then(|p| p.get("uri").cloned())
             .and_then(|u| u.as_str().map(|s| s.to_string()))
             .ok_or_else(|| BarefootError::Mcp("Missing uri parameter".to_string()))?;
-        
+
         let resource = self.server.get_resource(&uri).await?;
         Ok(McpMessage {
             jsonrpc: "2.0".to_string(),
@@ -421,7 +436,7 @@ impl McpProtocolHandler {
             error: None,
         })
     }
-    
+
     async fn handle_list_tools(&self, message: McpMessage) -> Result<McpMessage> {
         let tools = self.server.list_tools().await?;
         Ok(McpMessage {
@@ -433,19 +448,22 @@ impl McpProtocolHandler {
             error: None,
         })
     }
-    
+
     async fn handle_call_tool(&self, message: McpMessage) -> Result<McpMessage> {
-        let params = message.params
+        let params = message
+            .params
             .ok_or_else(|| BarefootError::Mcp("Missing params".to_string()))?;
-        
-        let name = params.get("name")
+
+        let name = params
+            .get("name")
             .and_then(|n| n.as_str())
             .ok_or_else(|| BarefootError::Mcp("Missing tool name".to_string()))?;
-        
-        let args = params.get("arguments")
+
+        let args = params
+            .get("arguments")
             .cloned()
             .unwrap_or_else(|| serde_json::json!({}));
-        
+
         let result = self.server.execute_tool(name, args).await?;
         Ok(McpMessage {
             jsonrpc: "2.0".to_string(),
@@ -456,7 +474,7 @@ impl McpProtocolHandler {
             error: None,
         })
     }
-    
+
     async fn handle_list_prompts(&self, message: McpMessage) -> Result<McpMessage> {
         let prompts = self.server.list_prompts().await?;
         Ok(McpMessage {
@@ -468,13 +486,14 @@ impl McpProtocolHandler {
             error: None,
         })
     }
-    
+
     async fn handle_get_prompt(&self, message: McpMessage) -> Result<McpMessage> {
-        let name = message.params
+        let name = message
+            .params
             .and_then(|p| p.get("name").cloned())
             .and_then(|n| n.as_str().map(|s| s.to_string()))
             .ok_or_else(|| BarefootError::Mcp("Missing prompt name".to_string()))?;
-        
+
         let prompt = self.server.get_prompt(&name).await?;
         Ok(McpMessage {
             jsonrpc: "2.0".to_string(),
@@ -490,7 +509,7 @@ impl McpProtocolHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_stdio_transport() {
         use futures::pin_mut;
@@ -511,34 +530,46 @@ mod tests {
         }
         assert!(!transport.is_running());
     }
-    
+
     #[tokio::test]
     async fn test_tcp_transport() {
         let transport = TcpTransport::new("127.0.0.1".to_string(), 8080);
-        assert_eq!(transport.transport_type(), TransportType::Tcp { host: "127.0.0.1".to_string(), port: 8080 });
+        assert_eq!(
+            transport.transport_type(),
+            TransportType::Tcp {
+                host: "127.0.0.1".to_string(),
+                port: 8080
+            }
+        );
     }
-    
+
     #[tokio::test]
     async fn test_websocket_transport() {
         let transport = WebSocketTransport::new("127.0.0.1".to_string(), 8081);
-        assert_eq!(transport.transport_type(), TransportType::WebSocket { host: "127.0.0.1".to_string(), port: 8081 });
+        assert_eq!(
+            transport.transport_type(),
+            TransportType::WebSocket {
+                host: "127.0.0.1".to_string(),
+                port: 8081
+            }
+        );
     }
-    
+
     #[tokio::test]
     async fn test_transport_factory() {
         let config = McpConfig::default();
         let server = server::BarefootMcpServer::new(config);
-        
+
         let transport = TransportFactory::create(TransportType::Stdio, server);
         assert!(transport.is_ok());
     }
-    
+
     #[tokio::test]
     async fn test_mcp_protocol_handler() {
         let config = McpConfig::default();
         let server = server::BarefootMcpServer::new(config);
         let handler = McpProtocolHandler::new(server);
-        
+
         let message = McpMessage {
             jsonrpc: "2.0".to_string(),
             id: Some(serde_json::json!(1)),
@@ -547,8 +578,8 @@ mod tests {
             result: None,
             error: None,
         };
-        
+
         let response = handler.handle_message(message).await;
         assert!(response.is_ok());
     }
-} 
+}

@@ -1,30 +1,30 @@
-use crate::error::{BarefootError, Result};
 use crate::config::BarefootConfig;
+use crate::error::{BarefootError, Result};
 use crate::types::{Job, RunnerCapabilities};
 use async_trait::async_trait;
 use reqwest::Client;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::time::Instant;
-use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::Instant;
 
 /// Service client trait for different CI/CD platforms
 #[async_trait]
 pub trait ServiceClient: Send + Sync {
     /// Get available jobs
     async fn get_jobs(&self) -> Result<Vec<Job>>;
-    
+
     /// Update job status
     async fn update_job_status(&self, job_id: &str, status: &str) -> Result<()>;
-    
+
     /// Send job logs
     async fn send_job_logs(&self, job_id: &str, logs: &str) -> Result<()>;
-    
+
     /// Register runner with the service
     async fn register_runner(&self, capabilities: &RunnerCapabilities) -> Result<()>;
-    
+
     /// Deregister runner from the service
     async fn deregister_runner(&self) -> Result<()>;
 }
@@ -39,18 +39,31 @@ pub struct GitHubClient {
 impl GitHubClient {
     pub fn new(config: BarefootConfig) -> Self {
         let mut headers = HashMap::new();
-        headers.insert("Authorization".to_string(), format!("token {}", config.service.token));
-        headers.insert("Accept".to_string(), "application/vnd.github.v3+json".to_string());
+        headers.insert(
+            "Authorization".to_string(),
+            format!("token {}", config.service.token),
+        );
+        headers.insert(
+            "Accept".to_string(),
+            "application/vnd.github.v3+json".to_string(),
+        );
         headers.insert("User-Agent".to_string(), "barefoot-runner".to_string());
-        
+
         let client = Client::builder()
-            .default_headers(headers.into_iter().map(|(k, v)| {
-                (reqwest::header::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-                 reqwest::header::HeaderValue::from_str(&v).unwrap())
-            }).collect())
+            .default_headers(
+                headers
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            reqwest::header::HeaderName::from_bytes(k.as_bytes()).unwrap(),
+                            reqwest::header::HeaderValue::from_str(&v).unwrap(),
+                        )
+                    })
+                    .collect(),
+            )
             .build()
             .unwrap();
-        
+
         Self {
             client,
             base_url: config.service.url,
@@ -62,27 +75,27 @@ impl GitHubClient {
 #[async_trait]
 impl ServiceClient for GitHubClient {
     async fn get_jobs(&self) -> Result<Vec<Job>> {
-        let response = self.client
+        let response = self
+            .client
             .get(format!("{}/actions/runners/jobs", self.base_url))
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
-        let jobs: Vec<Job> = response.json()
-            .await
-            .map_err(BarefootError::HttpRequest)?;
-        
+
+        let jobs: Vec<Job> = response.json().await.map_err(BarefootError::HttpRequest)?;
+
         Ok(jobs)
     }
-    
+
     async fn update_job_status(&self, job_id: &str, status: &str) -> Result<()> {
-        let response = self.client
+        let response = self
+            .client
             .patch(format!("{}/actions/jobs/{}", self.base_url, job_id))
             .json(&serde_json::json!({
                 "status": status
@@ -90,37 +103,42 @@ impl ServiceClient for GitHubClient {
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
+
         Ok(())
     }
-    
+
     async fn send_job_logs(&self, job_id: &str, logs: &str) -> Result<()> {
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/actions/jobs/{}/logs", self.base_url, job_id))
             .body(logs.to_string())
             .header("Content-Type", "text/plain")
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
+
         Ok(())
     }
-    
+
     async fn register_runner(&self, capabilities: &RunnerCapabilities) -> Result<()> {
-        let response = self.client
-            .post(format!("{}/actions/runners/registration-token", self.base_url))
+        let response = self
+            .client
+            .post(format!(
+                "{}/actions/runners/registration-token",
+                self.base_url
+            ))
             .json(&serde_json::json!({
                 "name": "barefoot-runner",
                 "capabilities": capabilities
@@ -128,29 +146,30 @@ impl ServiceClient for GitHubClient {
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
+
         Ok(())
     }
-    
+
     async fn deregister_runner(&self) -> Result<()> {
-        let response = self.client
+        let response = self
+            .client
             .delete(format!("{}/actions/runners/self", self.base_url))
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
+
         Ok(())
     }
 }
@@ -168,25 +187,37 @@ pub struct JujutsuClient {
 impl JujutsuClient {
     pub fn new(config: BarefootConfig) -> Self {
         let mut headers = HashMap::new();
-        headers.insert("Authorization".to_string(), format!("Bearer {}", config.service.token));
+        headers.insert(
+            "Authorization".to_string(),
+            format!("Bearer {}", config.service.token),
+        );
         headers.insert("Accept".to_string(), "application/json".to_string());
         headers.insert("User-Agent".to_string(), "barefoot-runner".to_string());
-        
+
         let client = Client::builder()
-            .default_headers(headers.into_iter().map(|(k, v)| {
-                (reqwest::header::HeaderName::from_bytes(k.as_bytes()).unwrap(),
-                 reqwest::header::HeaderValue::from_str(&v).unwrap())
-            }).collect())
+            .default_headers(
+                headers
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            reqwest::header::HeaderName::from_bytes(k.as_bytes()).unwrap(),
+                            reqwest::header::HeaderValue::from_str(&v).unwrap(),
+                        )
+                    })
+                    .collect(),
+            )
             .build()
             .unwrap();
-        
+
         // Check if the URL is a local path (doesn't start with http:// or https://)
-        let repository_path = if !config.service.url.starts_with("http://") && !config.service.url.starts_with("https://") {
+        let repository_path = if !config.service.url.starts_with("http://")
+            && !config.service.url.starts_with("https://")
+        {
             Some(config.service.url.clone())
         } else {
             None
         };
-        
+
         Self {
             client,
             base_url: config.service.url,
@@ -210,7 +241,7 @@ impl JujutsuClient {
         }
 
         let mut jobs = Vec::new();
-        
+
         // Scan for .json and .toml files in .barefoot directory
         if let Ok(entries) = std::fs::read_dir(&barefoot_dir) {
             for entry in entries.flatten() {
@@ -226,7 +257,7 @@ impl JujutsuClient {
                                 toml::from_str::<Job>(&content)
                                     .map_err(crate::error::BarefootError::TomlDeserialization)
                             };
-                            
+
                             if let Ok(job) = job_result {
                                 jobs.push(job);
                             } else {
@@ -242,15 +273,24 @@ impl JujutsuClient {
     }
 
     /// Start watching the .barefoot directory for changes with debouncing
-    pub async fn start_file_watching(&self, tx: mpsc::Sender<String>) -> Result<tokio::task::JoinHandle<()>> {
+    pub async fn start_file_watching(
+        &self,
+        tx: mpsc::Sender<String>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
         let repository_path = match &self.repository_path {
             Some(path) => path.clone(),
-            None => return Err(BarefootError::InvalidState("No local repository path configured".to_string())),
+            None => {
+                return Err(BarefootError::InvalidState(
+                    "No local repository path configured".to_string(),
+                ))
+            }
         };
 
         let barefoot_dir = std::path::Path::new(&repository_path).join(".barefoot");
         if !barefoot_dir.exists() {
-            return Err(BarefootError::InvalidState("`.barefoot` directory does not exist".to_string()));
+            return Err(BarefootError::InvalidState(
+                "`.barefoot` directory does not exist".to_string(),
+            ));
         }
 
         let debounce_delay = self.debounce_delay;
@@ -271,7 +311,7 @@ impl JujutsuClient {
                     // Check for new files periodically
                     _ = tokio::time::sleep(check_interval) => {
                         let now = Instant::now();
-                        
+
                         // Check if trapdoor timer has expired
                         if now.duration_since(last_check) > trapdoor_timeout {
                             tracing::info!("Trapdoor timer expired - no file activity for 5 minutes, shutting down file watcher");
@@ -305,10 +345,10 @@ impl JujutsuClient {
                                                         let debounce_delay = debounce_delay;
                                                         let last_change_time = Arc::clone(&last_change_time);
                                                         let tx = Arc::clone(&tx);
-                                                        
+
                                                         tokio::spawn(async move {
                                                             tokio::time::sleep(debounce_delay).await;
-                                                            
+
                                                             // Check if this is still the most recent change
                                                             let should_notify = {
                                                                 let last_time = last_change_time.lock().await;
@@ -332,7 +372,7 @@ impl JujutsuClient {
                                 }
                             }
                         }
-                        
+
                         last_check = now;
                     }
                 }
@@ -367,25 +407,24 @@ impl ServiceClient for JujutsuClient {
         }
 
         // Otherwise, use HTTP polling
-        let response = self.client
+        let response = self
+            .client
             .get(format!("{}/jobs", self.base_url))
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
-        let jobs: Vec<Job> = response.json()
-            .await
-            .map_err(BarefootError::HttpRequest)?;
-        
+
+        let jobs: Vec<Job> = response.json().await.map_err(BarefootError::HttpRequest)?;
+
         Ok(jobs)
     }
-    
+
     async fn update_job_status(&self, job_id: &str, status: &str) -> Result<()> {
         // For local Jujutsu jobs, just log the status update
         if self.repository_path.is_some() {
@@ -395,11 +434,15 @@ impl ServiceClient for JujutsuClient {
 
         // For remote Jujutsu jobs, use HTTP update
         if !self.base_url.starts_with("http://") && !self.base_url.starts_with("https://") {
-            tracing::info!("Skipping job status update for invalid URL: {}", self.base_url);
+            tracing::info!(
+                "Skipping job status update for invalid URL: {}",
+                self.base_url
+            );
             return Ok(());
         }
 
-        let response = self.client
+        let response = self
+            .client
             .patch(format!("{}/jobs/{}", self.base_url, job_id))
             .json(&serde_json::json!({
                 "status": status
@@ -407,16 +450,16 @@ impl ServiceClient for JujutsuClient {
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
+
         Ok(())
     }
-    
+
     async fn send_job_logs(&self, job_id: &str, logs: &str) -> Result<()> {
         // For local Jujutsu jobs, just log the logs
         if self.repository_path.is_some() {
@@ -430,23 +473,24 @@ impl ServiceClient for JujutsuClient {
             return Ok(());
         }
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/jobs/{}/logs", self.base_url, job_id))
             .body(logs.to_string())
             .header("Content-Type", "text/plain")
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
+
         Ok(())
     }
-    
+
     async fn register_runner(&self, capabilities: &RunnerCapabilities) -> Result<()> {
         // For local Jujutsu jobs, registration is not needed
         if self.repository_path.is_some() {
@@ -456,11 +500,15 @@ impl ServiceClient for JujutsuClient {
 
         // For remote Jujutsu jobs, use HTTP registration
         if !self.base_url.starts_with("http://") && !self.base_url.starts_with("https://") {
-            tracing::info!("Skipping runner registration for invalid URL: {}", self.base_url);
+            tracing::info!(
+                "Skipping runner registration for invalid URL: {}",
+                self.base_url
+            );
             return Ok(());
         }
 
-        let response = self.client
+        let response = self
+            .client
             .post(format!("{}/runners", self.base_url))
             .json(&serde_json::json!({
                 "name": "barefoot-runner",
@@ -469,29 +517,30 @@ impl ServiceClient for JujutsuClient {
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
+
         Ok(())
     }
-    
+
     async fn deregister_runner(&self) -> Result<()> {
-        let response = self.client
+        let response = self
+            .client
             .delete(format!("{}/runners/self", self.base_url))
             .send()
             .await
             .map_err(BarefootError::HttpRequest)?;
-        
+
         if !response.status().is_success() {
-            return Err(BarefootError::HttpStatus { 
-                status: response.status().as_u16() 
+            return Err(BarefootError::HttpStatus {
+                status: response.status().as_u16(),
             });
         }
-        
+
         Ok(())
     }
 }
@@ -503,30 +552,27 @@ pub struct ServiceClientFactory;
 impl ServiceClientFactory {
     pub fn create_client(config: BarefootConfig) -> Result<Box<dyn ServiceClient + Send + Sync>> {
         match config.service.service_type {
-            crate::types::ServiceType::GitHub => {
-                Ok(Box::new(GitHubClient::new(config)))
-            }
-            crate::types::ServiceType::Jujutsu => {
-                Ok(Box::new(JujutsuClient::new(config)))
-            }
+            crate::types::ServiceType::GitHub => Ok(Box::new(GitHubClient::new(config))),
+            crate::types::ServiceType::Jujutsu => Ok(Box::new(JujutsuClient::new(config))),
             _ => {
                 // TODO: Add support for additional service types (Forgejo, Codeberg, Sourcehut, Gitea)
-                Err(BarefootError::ServiceNotFound(
-                    format!("Service type {:?} not supported", config.service.service_type)
-                ))
+                Err(BarefootError::ServiceNotFound(format!(
+                    "Service type {:?} not supported",
+                    config.service.service_type
+                )))
             }
         }
     }
-} 
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::BarefootConfig;
     use crate::types::ServiceType;
-    use tempfile::TempDir;
     use std::fs;
     use std::time::Duration;
+    use tempfile::TempDir;
     use tokio::time::sleep;
 
     fn test_config() -> BarefootConfig {
@@ -583,7 +629,7 @@ mod tests {
         let mut config = test_config();
         config.service.url = temp_dir.path().to_string_lossy().to_string();
         let client = JujutsuClient::new(config);
-        
+
         // Test that the client can scan the directory
         let jobs = client.get_jobs().await;
         assert!(jobs.is_ok());
@@ -621,7 +667,7 @@ run = "echo 'hello'""#;
         let mut config = test_config();
         config.service.url = temp_dir.path().to_string_lossy().to_string();
         let client = JujutsuClient::new(config);
-        
+
         // Test that the client can scan the directory
         let jobs = client.get_jobs().await;
         if let Err(e) = &jobs {
@@ -645,7 +691,7 @@ run = "echo 'hello'""#;
         let mut config = test_config();
         config.service.url = temp_dir.path().to_string_lossy().to_string();
         let client = JujutsuClient::new(config);
-        
+
         let jobs = client.get_jobs().await;
         assert!(jobs.is_ok());
         assert_eq!(jobs.unwrap().len(), 0);
@@ -664,7 +710,7 @@ run = "echo 'hello'""#;
         let mut config = test_config();
         config.service.url = temp_dir.path().to_string_lossy().to_string();
         let client = JujutsuClient::new(config);
-        
+
         // Should handle invalid files gracefully
         let jobs = client.get_jobs().await;
         assert!(jobs.is_ok());
@@ -680,7 +726,7 @@ run = "echo 'hello'""#;
         let mut config = test_config();
         config.service.url = temp_dir.path().to_string_lossy().to_string();
         let client = JujutsuClient::new(config);
-        
+
         // Start watching for changes
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let watch_handle = client.start_file_watching(tx).await;
@@ -729,7 +775,7 @@ duration = null"#;
         let mut config = test_config();
         config.service.url = temp_dir.path().to_string_lossy().to_string();
         let client = JujutsuClient::new(config);
-        
+
         // Start watching for changes
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let watch_handle = client.start_file_watching(tx).await;
@@ -742,9 +788,10 @@ duration = null"#;
         for i in 0..3 {
             let extension = if i % 2 == 0 { "json" } else { "toml" };
             let job_file = barefoot_dir.join(format!("job-{i}.{extension}"));
-            
+
             let job_content = if extension == "json" {
-                format!(r#"{{
+                format!(
+                    r#"{{
                     "id": "550e8400-e29b-41d4-a716-446655440{i:03}",
                     "name": "Job {i}",
                     "status": "Queued",
@@ -753,9 +800,11 @@ duration = null"#;
                     "started_at": null,
                     "completed_at": null,
                     "steps": []
-                }}"#)
+                }}"#
+                )
             } else {
-                format!(r#"id = "550e8400-e29b-41d4-a716-446655440{i:03}"
+                format!(
+                    r#"id = "550e8400-e29b-41d4-a716-446655440{i:03}"
 name = "Job {i}"
 status = "Queued"
 workflow = "test-workflow"
@@ -768,15 +817,19 @@ name = "test-step"
 status = "Queued"
 run = "echo 'hello'"
 uses = null
-duration = null"#)
+duration = null"#
+                )
             };
-            
+
             fs::write(&job_file, job_content).unwrap();
         }
 
         // Should receive multiple notifications
         let mut notifications = 0;
-        while tokio::time::timeout(Duration::from_secs(30), rx.recv()).await.is_ok() {
+        while tokio::time::timeout(Duration::from_secs(30), rx.recv())
+            .await
+            .is_ok()
+        {
             notifications += 1;
             if notifications >= 3 {
                 break;
@@ -799,7 +852,7 @@ duration = null"#)
         let mut config = test_config();
         config.service.url = temp_dir.path().to_string_lossy().to_string();
         let client = JujutsuClient::new(config);
-        
+
         // Start watching for changes
         let (tx, _rx) = tokio::sync::mpsc::channel(100);
         let watch_handle = client.start_file_watching(tx).await;
@@ -817,4 +870,4 @@ duration = null"#)
             }
         }
     }
-} 
+}
