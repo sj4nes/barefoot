@@ -35,6 +35,7 @@ features = { streaming = true, realtime = true, sampling = false, prompts = fals
 level = "info"  # Possible values: "trace", "debug", "info", "warn", "error"
 format = "json"  # Possible values: "json", "text"
 differential_logging = { enabled = true, max_job_runs = 25 }
+log_truncation = { enabled = true, first_lines = 3, last_lines = 5 }
 
 [security]
 enable_ssl_verification = true

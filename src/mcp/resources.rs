@@ -7,10 +7,10 @@
 
 use super::*;
 use crate::core::RunnerCore;
+use crate::error::Result;
+use chrono::Utc;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::Utc;
-use crate::error::Result;
 
 /// Resource provider enum to avoid async trait objects
 #[derive(Clone)]
@@ -31,7 +31,7 @@ impl ResourceProvider {
             ResourceProvider::Config(r) => r.resource_id(),
         }
     }
-    
+
     /// Get resource content
     pub async fn get_content(&self) -> Result<ResourceContent> {
         match self {
@@ -41,7 +41,7 @@ impl ResourceProvider {
             ResourceProvider::Config(r) => r.get_content().await,
         }
     }
-    
+
     /// Check if resource is available
     pub async fn is_available(&self) -> bool {
         match self {
@@ -51,7 +51,7 @@ impl ResourceProvider {
             ResourceProvider::Config(r) => r.is_available().await,
         }
     }
-    
+
     /// Get resource expiration time
     pub fn expires_at(&self) -> Option<chrono::DateTime<Utc>> {
         match self {
@@ -83,7 +83,7 @@ impl HealthResource {
             last_error,
         }
     }
-    
+
     pub fn resource_id(&self) -> ResourceId {
         ResourceId {
             uri: "barefoot://runner/health".to_string(),
@@ -92,12 +92,12 @@ impl HealthResource {
             description: "Overall runner system health and status".to_string(),
         }
     }
-    
+
     pub async fn get_content(&self) -> Result<ResourceContent> {
         let runner_core = self.runner_core.read().await;
         let status = runner_core.status().await;
         let last_error = self.last_error.read().await.clone();
-        
+
         let content = serde_json::json!({
             "status": status.to_string(),
             "active_jobs": runner_core.current_jobs().await.len(),
@@ -108,7 +108,7 @@ impl HealthResource {
             "can_accept_jobs": runner_core.can_accept_jobs().await,
             "health_score": self.calculate_health_score(&runner_core).await,
         });
-        
+
         Ok(ResourceContent {
             id: self.resource_id(),
             content,
@@ -116,40 +116,40 @@ impl HealthResource {
             expires_at: Some(Utc::now() + chrono::Duration::seconds(30)),
         })
     }
-    
+
     pub async fn is_available(&self) -> bool {
         true // Health resource is always available
     }
-    
+
     pub fn expires_at(&self) -> Option<chrono::DateTime<Utc>> {
         Some(Utc::now() + chrono::Duration::seconds(30))
     }
-    
+
     async fn calculate_health_score(&self, runner_core: &RunnerCore) -> f64 {
         let mut score = 100.0;
-        
+
         // Deduct points for errors
         if let Some(_error) = &*self.last_error.read().await {
             score -= 20.0;
         }
-        
+
         // Deduct points for high queue size
         let queue_size = runner_core.queue_size().await;
         if queue_size > 10 {
             score -= (queue_size as f64 - 10.0) * 2.0;
         }
-        
+
         // Deduct points for many active jobs (potential overload)
         let active_jobs = runner_core.current_jobs().await.len();
         if active_jobs > 5 {
             score -= (active_jobs as f64 - 5.0) * 3.0;
         }
-        
+
         // Deduct points if runner can't accept jobs
         if !runner_core.can_accept_jobs().await {
             score -= 30.0;
         }
-        
+
         score.max(0.0)
     }
 }
@@ -164,7 +164,7 @@ impl ActiveJobsResource {
     pub fn new(runner_core: Arc<RwLock<RunnerCore>>) -> Self {
         Self { runner_core }
     }
-    
+
     pub fn resource_id(&self) -> ResourceId {
         ResourceId {
             uri: "barefoot://jobs/active".to_string(),
@@ -173,12 +173,12 @@ impl ActiveJobsResource {
             description: "Currently running and queued jobs".to_string(),
         }
     }
-    
+
     pub async fn get_content(&self) -> Result<ResourceContent> {
         let runner_core = self.runner_core.read().await;
         let active_jobs = runner_core.current_jobs().await;
         let queue = runner_core.job_queue().await;
-        
+
         let content = serde_json::json!({
             "active_jobs": active_jobs,
             "queued_jobs": queue,
@@ -190,7 +190,7 @@ impl ActiveJobsResource {
             },
             "last_updated": Utc::now().to_rfc3339(),
         });
-        
+
         Ok(ResourceContent {
             id: self.resource_id(),
             content,
@@ -198,11 +198,11 @@ impl ActiveJobsResource {
             expires_at: Some(Utc::now() + chrono::Duration::seconds(10)),
         })
     }
-    
+
     pub async fn is_available(&self) -> bool {
         true // Active jobs resource is always available
     }
-    
+
     pub fn expires_at(&self) -> Option<chrono::DateTime<Utc>> {
         Some(Utc::now() + chrono::Duration::seconds(10))
     }
@@ -218,7 +218,7 @@ impl JobHistoryResource {
     pub fn new(runner_core: Arc<RwLock<RunnerCore>>) -> Self {
         Self { runner_core }
     }
-    
+
     pub fn resource_id(&self) -> ResourceId {
         ResourceId {
             uri: "barefoot://jobs/history".to_string(),
@@ -227,26 +227,29 @@ impl JobHistoryResource {
             description: "Historical job execution data".to_string(),
         }
     }
-    
+
     pub async fn get_content(&self) -> Result<ResourceContent> {
         let runner_core = self.runner_core.read().await;
         let job_runs = runner_core.get_all_job_runs().await;
-        
+
         let total_jobs = job_runs.len();
-        let successful_jobs = job_runs.iter().filter(|run| run.status == crate::types::JobStatus::Completed).count();
+        let successful_jobs = job_runs
+            .iter()
+            .filter(|run| run.status == crate::types::JobStatus::Completed)
+            .count();
         let success_rate = if total_jobs > 0 {
             (successful_jobs as f64 / total_jobs as f64) * 100.0
         } else {
             0.0
         };
-        
+
         let average_duration = if total_jobs > 0 {
             let total_duration: u128 = job_runs.iter().map(|run| run.duration_ms).sum();
             total_duration / total_jobs as u128
         } else {
             0
         };
-        
+
         let content = serde_json::json!({
             "recent_jobs": job_runs.iter().take(10).map(|run| {
                 serde_json::json!({
@@ -263,7 +266,7 @@ impl JobHistoryResource {
             "total_jobs": total_jobs,
             "last_updated": Utc::now().to_rfc3339(),
         });
-        
+
         Ok(ResourceContent {
             id: self.resource_id(),
             content,
@@ -271,11 +274,11 @@ impl JobHistoryResource {
             expires_at: Some(Utc::now() + chrono::Duration::seconds(60)),
         })
     }
-    
+
     pub async fn is_available(&self) -> bool {
         true // Job history resource is always available
     }
-    
+
     pub fn expires_at(&self) -> Option<chrono::DateTime<Utc>> {
         Some(Utc::now() + chrono::Duration::seconds(60))
     }
@@ -291,7 +294,7 @@ impl ConfigResource {
     pub fn new(config: crate::config::BarefootConfig) -> Self {
         Self { config }
     }
-    
+
     pub fn resource_id(&self) -> ResourceId {
         ResourceId {
             uri: "barefoot://config/runner".to_string(),
@@ -300,7 +303,7 @@ impl ConfigResource {
             description: "Current runner configuration settings".to_string(),
         }
     }
-    
+
     pub async fn get_content(&self) -> Result<ResourceContent> {
         let content = serde_json::json!({
             "service_type": self.config.service.service_type,
@@ -310,7 +313,7 @@ impl ConfigResource {
             "log_level": self.config.logging.level,
             "differential_logging": self.config.logging.differential_logging,
         });
-        
+
         Ok(ResourceContent {
             id: self.resource_id(),
             content,
@@ -318,11 +321,11 @@ impl ConfigResource {
             expires_at: Some(Utc::now() + chrono::Duration::seconds(300)),
         })
     }
-    
+
     pub async fn is_available(&self) -> bool {
         true // Config resource is always available
     }
-    
+
     pub fn expires_at(&self) -> Option<chrono::DateTime<Utc>> {
         Some(Utc::now() + chrono::Duration::seconds(300))
     }
@@ -340,12 +343,12 @@ impl ResourceManager {
             resources: std::collections::HashMap::new(),
         }
     }
-    
+
     pub fn register_resource(&mut self, resource: ResourceProvider) {
         let uri = resource.resource_id().uri.clone();
         self.resources.insert(uri, resource);
     }
-    
+
     pub async fn get_resource(&self, uri: &str) -> Result<ResourceContent> {
         if let Some(resource) = self.resources.get(uri) {
             resource.get_content().await
@@ -353,14 +356,11 @@ impl ResourceManager {
             Err(BarefootError::Mcp(format!("Resource not found: {}", uri)))
         }
     }
-    
+
     pub fn list_resources(&self) -> Vec<ResourceId> {
-        self.resources
-            .values()
-            .map(|r| r.resource_id())
-            .collect()
+        self.resources.values().map(|r| r.resource_id()).collect()
     }
-    
+
     pub fn has_resource(&self, uri: &str) -> bool {
         self.resources.contains_key(uri)
     }
@@ -376,48 +376,51 @@ impl Default for ResourceManager {
 mod tests {
     use super::*;
     use crate::config::BarefootConfig;
-    
+
     #[tokio::test]
     async fn test_health_resource() {
         let runner_core = Arc::new(RwLock::new(RunnerCore::new(BarefootConfig::default())));
         let last_error = Arc::new(RwLock::new(None));
         let health_resource = HealthResource::new(runner_core, Some(Utc::now()), last_error);
-        
+
         let content = health_resource.get_content().await.unwrap();
         assert_eq!(content.id.uri, "barefoot://runner/health");
         assert!(content.content.is_object());
     }
-    
+
     #[tokio::test]
     async fn test_active_jobs_resource() {
         let runner_core = Arc::new(RwLock::new(RunnerCore::new(BarefootConfig::default())));
         let active_jobs_resource = ActiveJobsResource::new(runner_core);
-        
+
         let content = active_jobs_resource.get_content().await.unwrap();
         assert_eq!(content.id.uri, "barefoot://jobs/active");
         assert!(content.content.is_object());
     }
-    
+
     #[tokio::test]
     async fn test_config_resource() {
         let config = BarefootConfig::default();
         let config_resource = ConfigResource::new(config);
-        
+
         let content = config_resource.get_content().await.unwrap();
         assert_eq!(content.id.uri, "barefoot://config/runner");
         assert!(content.content.is_object());
     }
-    
+
     #[tokio::test]
     async fn test_resource_manager() {
         let mut manager = ResourceManager::new();
         let config = BarefootConfig::default();
         let config_resource = ResourceProvider::Config(ConfigResource::new(config));
-        
+
         manager.register_resource(config_resource);
         assert!(manager.has_resource("barefoot://config/runner"));
-        
-        let content = manager.get_resource("barefoot://config/runner").await.unwrap();
+
+        let content = manager
+            .get_resource("barefoot://config/runner")
+            .await
+            .unwrap();
         assert_eq!(content.id.uri, "barefoot://config/runner");
     }
-} 
+}

@@ -1,8 +1,8 @@
 //! MCP prompts for barefoot runner
 
 use super::*;
-use std::collections::HashMap;
 use crate::error::Result;
+use std::collections::HashMap;
 
 /// Prompt template manager
 pub struct PromptManager {
@@ -12,7 +12,7 @@ pub struct PromptManager {
 impl PromptManager {
     pub fn new() -> Self {
         let mut templates = HashMap::new();
-        
+
         // Add default prompt templates
         templates.insert(
             "job_failure_analysis".to_string(),
@@ -24,7 +24,7 @@ impl PromptManager {
                 category: "troubleshooting".to_string(),
             },
         );
-        
+
         templates.insert(
             "performance_optimization".to_string(),
             PromptTemplate {
@@ -35,7 +35,7 @@ impl PromptManager {
                 category: "optimization".to_string(),
             },
         );
-        
+
         templates.insert(
             "job_scheduling".to_string(),
             PromptTemplate {
@@ -46,7 +46,7 @@ impl PromptManager {
                 category: "scheduling".to_string(),
             },
         );
-        
+
         templates.insert(
             "configuration_validation".to_string(),
             PromptTemplate {
@@ -57,7 +57,7 @@ impl PromptManager {
                 category: "configuration".to_string(),
             },
         );
-        
+
         templates.insert(
             "error_pattern_analysis".to_string(),
             PromptTemplate {
@@ -68,7 +68,7 @@ impl PromptManager {
                 category: "analysis".to_string(),
             },
         );
-        
+
         templates.insert(
             "resource_allocation".to_string(),
             PromptTemplate {
@@ -79,7 +79,7 @@ impl PromptManager {
                 category: "optimization".to_string(),
             },
         );
-        
+
         templates.insert(
             "monitoring_setup".to_string(),
             PromptTemplate {
@@ -90,7 +90,7 @@ impl PromptManager {
                 category: "monitoring".to_string(),
             },
         );
-        
+
         templates.insert(
             "security_audit".to_string(),
             PromptTemplate {
@@ -101,20 +101,20 @@ impl PromptManager {
                 category: "security".to_string(),
             },
         );
-        
+
         Self { templates }
     }
-    
+
     /// Get a prompt template by name
     pub fn get_template(&self, name: &str) -> Option<&PromptTemplate> {
         self.templates.get(name)
     }
-    
+
     /// List all available prompt templates
     pub fn list_templates(&self) -> Vec<&PromptTemplate> {
         self.templates.values().collect()
     }
-    
+
     /// List templates by category
     pub fn list_templates_by_category(&self, category: &str) -> Vec<&PromptTemplate> {
         self.templates
@@ -122,33 +122,40 @@ impl PromptManager {
             .filter(|template| template.category == category)
             .collect()
     }
-    
+
     /// Render a prompt template with variables
-    pub fn render_template(&self, name: &str, variables: HashMap<String, String>) -> Result<String> {
+    pub fn render_template(
+        &self,
+        name: &str,
+        variables: HashMap<String, String>,
+    ) -> Result<String> {
         if let Some(template) = self.get_template(name) {
             let mut content = template.content.clone();
-            
+
             for (var_name, var_value) in variables {
                 let placeholder = format!("{{{}}}", var_name);
                 content = content.replace(&placeholder, &var_value);
             }
-            
+
             Ok(content)
         } else {
-            Err(BarefootError::Mcp(format!("Prompt template not found: {}", name)))
+            Err(BarefootError::Mcp(format!(
+                "Prompt template not found: {}",
+                name
+            )))
         }
     }
-    
+
     /// Add a custom prompt template
     pub fn add_template(&mut self, template: PromptTemplate) {
         self.templates.insert(template.name.clone(), template);
     }
-    
+
     /// Remove a prompt template
     pub fn remove_template(&mut self, name: &str) -> Option<PromptTemplate> {
         self.templates.remove(name)
     }
-    
+
     /// Get template categories
     pub fn get_categories(&self) -> Vec<String> {
         let mut categories = std::collections::HashSet::new();
@@ -184,32 +191,32 @@ impl PromptTemplateBuilder {
             category: "custom".to_string(),
         }
     }
-    
+
     pub fn description(mut self, description: String) -> Self {
         self.description = description;
         self
     }
-    
+
     pub fn content(mut self, content: String) -> Self {
         self.content = content;
         self
     }
-    
+
     pub fn variable(mut self, variable: String) -> Self {
         self.variables.push(variable);
         self
     }
-    
+
     pub fn variables(mut self, variables: Vec<String>) -> Self {
         self.variables = variables;
         self
     }
-    
+
     pub fn category(mut self, category: String) -> Self {
         self.category = category;
         self
     }
-    
+
     pub fn build(self) -> PromptTemplate {
         PromptTemplate {
             name: self.name,
@@ -224,16 +231,16 @@ impl PromptTemplateBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_prompt_manager_creation() {
         let manager = PromptManager::new();
-        
+
         assert!(manager.get_template("job_failure_analysis").is_some());
         assert!(manager.get_template("performance_optimization").is_some());
         assert!(manager.get_template("nonexistent").is_none());
     }
-    
+
     #[test]
     fn test_prompt_template_builder() {
         let template = PromptTemplateBuilder::new("test_template".to_string())
@@ -242,14 +249,14 @@ mod tests {
             .variable("variable".to_string())
             .category("test".to_string())
             .build();
-        
+
         assert_eq!(template.name, "test_template");
         assert_eq!(template.description, "Test description");
         assert_eq!(template.content, "Test content with {variable}");
         assert_eq!(template.variables, vec!["variable"]);
         assert_eq!(template.category, "test");
     }
-    
+
     #[test]
     fn test_template_rendering() {
         let manager = PromptManager::new();
@@ -258,28 +265,30 @@ mod tests {
         variables.insert("status".to_string(), "failed".to_string());
         variables.insert("logs".to_string(), "Error: test error".to_string());
         variables.insert("duration".to_string(), "30s".to_string());
-        
-        let rendered = manager.render_template("job_failure_analysis", variables).unwrap();
+
+        let rendered = manager
+            .render_template("job_failure_analysis", variables)
+            .unwrap();
         assert!(rendered.contains("test-job-123"));
         assert!(rendered.contains("failed"));
         assert!(rendered.contains("Error: test error"));
         assert!(rendered.contains("30s"));
     }
-    
+
     #[test]
     fn test_template_categories() {
         let manager = PromptManager::new();
         let categories = manager.get_categories();
-        
+
         assert!(categories.contains(&"troubleshooting".to_string()));
         assert!(categories.contains(&"optimization".to_string()));
         assert!(categories.contains(&"scheduling".to_string()));
     }
-    
+
     #[test]
     fn test_custom_template() {
         let mut manager = PromptManager::new();
-        
+
         let custom_template = PromptTemplate {
             name: "custom_template".to_string(),
             description: "Custom template".to_string(),
@@ -287,11 +296,11 @@ mod tests {
             variables: vec![],
             category: "custom".to_string(),
         };
-        
+
         manager.add_template(custom_template);
         assert!(manager.get_template("custom_template").is_some());
-        
+
         manager.remove_template("custom_template");
         assert!(manager.get_template("custom_template").is_none());
     }
-} 
+}
