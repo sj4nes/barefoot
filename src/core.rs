@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 use std::collections::VecDeque;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 /// Job run record for differential logging
 #[derive(Debug, Clone, Serialize)]

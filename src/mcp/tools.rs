@@ -770,7 +770,7 @@ impl ListJobsTool {
         let height = 60 + 30 * jobs.len() as u32;
         let table_png: Vec<u8> = {
             use plotters::prelude::*;
-            use tempfile::NamedTempFile;
+            
             use std::io::Read;
             let mut tmpfile = Builder::new().suffix(".png").tempfile().expect("Failed to create temp file");
             {
@@ -830,7 +830,7 @@ impl ListJobsTool {
         let chart_height = 300;
         let chart_png: Vec<u8> = {
             use plotters::prelude::*;
-            use tempfile::NamedTempFile;
+            
             use std::io::Read;
             let mut tmpfile = Builder::new().suffix(".png").tempfile().expect("Failed to create temp file");
             {
@@ -1137,7 +1137,7 @@ mod image_tests {
     use super::*;
     use std::io::{Read, Seek, SeekFrom};
     use tempfile::Builder;
-    use plotters::prelude::*;
+    
 
     #[test]
     fn test_table_image_generation() {

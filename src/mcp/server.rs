@@ -11,15 +11,6 @@ use chrono::Utc;
 use std::collections::VecDeque;
 use tokio::time::{sleep, Duration};
 use tokio::io::AsyncWriteExt;
-use std::net::SocketAddr;
-use axum::{
-    extract::Json,
-    http::Method,
-    response::Json as JsonResponse,
-    routing::{post, get},
-    Router,
-};
-use tower_http::cors::{Any, CorsLayer};
 
 /// MCP server for barefoot runner
 pub struct BarefootMcpServer {
@@ -949,8 +940,8 @@ mod tests {
     use tokio::io::{duplex, AsyncWriteExt, AsyncReadExt, AsyncBufReadExt};
 
     async fn run_protocol_once(input: &str) -> serde_json::Value {
-        let (mut client_write, mut server_read) = duplex(1024);
-        let (mut server_write, mut client_read) = duplex(1024);
+        let (mut client_write, server_read) = duplex(1024);
+        let (server_write, mut client_read) = duplex(1024);
         client_write.write_all(input.as_bytes()).await.unwrap();
         // Simulate a single protocol step
         let mut lines = tokio::io::BufReader::new(server_read).lines();
