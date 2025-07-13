@@ -8,26 +8,32 @@ token = ""  # Set your runner token here
 labels = ["self-hosted", "macos", "rust"]
 max_concurrent_jobs = 2
 work_dir = "./work"
-container_backend = "native"
+container_backend = "native"  # Possible values: "native", "docker", "podman"
 container_backend_opts = {}
 container_cleanup = { enabled = true, interval_minutes = 60, max_usage_bytes = 50000000000 }
 
 [runner.capabilities]
-os = "macos"
-architecture = "x86_64"
+os = "macos"  # Possible values: "linux", "macos", "windows"
+architecture = "x86_64"  # Possible values: "x86_64", "aarch64", "arm64"
 labels = ["self-hosted", "macos", "rust"]
 features = { "docker" = "false", "gpu" = "false", "rust" = "true" }
 
 [service]
-service_type = "Jujutsu"
+service_type = "Jujutsu"  # Possible values: "GitHub", "GitLab", "Gitea", "Jujutsu"
 url = "."
 token = ""  # Not required for local Jujutsu jobs
 api_version = ""
 custom_headers = {}
 
+[mcp]
+transport = { Http = { host = "localhost", port = 3000 } }  # Possible values: "Stdio", { "Tcp" = { host = "...", port = ... } }, { "WebSocket" = { host = "...", port = ... } }, { "Http" = { host = "...", port = ... } }
+auth = { enabled = false, api_key = "", tokens = [], roles = {} }
+limits = { max_connections = 100, max_resource_size = 10485760, request_timeout = 30, rate_limit = 1000 }
+features = { streaming = true, realtime = true, sampling = false, prompts = false }
+
 [logging]
-level = "info"
-format = "json"
+level = "info"  # Possible values: "trace", "debug", "info", "warn", "error"
+format = "json"  # Possible values: "json", "text"
 differential_logging = { enabled = true, max_job_runs = 25 }
 
 [security]
