@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::types::{RunnerConfig, ServiceConfig, ServiceType, RunnerCapabilities, ContainerCleanupConfig};
+use crate::mcp::McpConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -11,6 +12,14 @@ pub struct BarefootConfig {
     pub service: ServiceConfig,
     pub logging: LoggingConfig,
     pub security: SecurityConfig,
+    pub mcp: McpConfig,
+}
+
+/// Differential logging configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DifferentialLoggingConfig {
+    pub enabled: bool,
+    pub max_job_runs: usize,
 }
 
 /// Logging configuration
@@ -19,6 +28,7 @@ pub struct LoggingConfig {
     pub level: String,
     pub format: String,
     pub file: Option<String>,
+    pub differential_logging: DifferentialLoggingConfig,
 }
 
 /// Security configuration
@@ -64,12 +74,17 @@ impl Default for BarefootConfig {
                 level: "info".to_string(),
                 format: "json".to_string(),
                 file: None,
+                differential_logging: DifferentialLoggingConfig {
+                    enabled: true,
+                    max_job_runs: 25,
+                },
             },
             security: SecurityConfig {
                 enable_ssl_verification: true,
                 allowed_origins: vec!["*".to_string()],
                 max_upload_size: 100 * 1024 * 1024, // 100MB
             },
+            mcp: McpConfig::default(),
         }
     }
 }
@@ -108,13 +123,15 @@ impl BarefootConfig {
 
     /// Validate the configuration
     pub fn validate(&self) -> Result<()> {
-        if self.runner.token.is_empty() {
+        // Allow empty runner token for Jujutsu service type (local jobs)
+        if self.runner.token.is_empty() && self.service.service_type != ServiceType::Jujutsu {
             return Err(crate::error::BarefootError::Configuration(
                 "Runner token is required".to_string(),
             ));
         }
 
-        if self.service.token.is_empty() {
+        // Allow empty service token for Jujutsu service type (local jobs)
+        if self.service.token.is_empty() && self.service.service_type != ServiceType::Jujutsu {
             return Err(crate::error::BarefootError::Configuration(
                 "Service token is required".to_string(),
             ));

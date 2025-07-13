@@ -16,6 +16,9 @@ pub enum BarefootError {
     #[error("TOML serialization error: {0}")]
     TomlSerialization(#[from] toml::ser::Error),
     
+    #[error("TOML deserialization error: {0}")]
+    TomlDeserialization(#[from] toml::de::Error),
+    
     #[error("YAML parsing error: {0}")]
     Yaml(#[from] serde_yaml::Error),
     
@@ -46,8 +49,17 @@ pub enum BarefootError {
     #[error("Validation error: {0}")]
     Validation(String),
     
+    #[error("MCP error: {0}")]
+    Mcp(String),
+    
     #[error("Anyhow error: {0}")]
     Anyhow(#[from] anyhow::Error),
+}
+
+impl From<std::net::AddrParseError> for BarefootError {
+    fn from(err: std::net::AddrParseError) -> Self {
+        BarefootError::Mcp(format!("Invalid address: {}", err))
+    }
 }
 
 /// Result type for the barefoot runner

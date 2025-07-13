@@ -11,6 +11,7 @@ A modern, flexible runner system for GitHub-like services and Jujutsu. Built in 
 - **Comprehensive logging**: Structured logging with configurable levels
 - **Security**: SSL verification, token-based authentication, and secure defaults
 - **Extensible**: Plugin architecture for custom service integrations
+- **MCP Integration**: Model Context Protocol support for AI-assisted CI/CD management
 
 ## Quick Start
 
@@ -81,7 +82,165 @@ barefoot status
 
 # Stop the runner
 barefoot stop
+
+# Start MCP server for AI integration
+barefoot mcp --transport stdio
 ```
+
+## MCP Integration
+
+Barefoot includes Model Context Protocol (MCP) integration for AI-assisted CI/CD management. This allows AI tools like Cursor to interact with your runner system programmatically.
+
+### Available MCP Tools
+
+The MCP server provides several tools for managing your CI/CD infrastructure:
+
+#### Job Management
+- **`list_jobs`**: List active and queued jobs with visual charts and tables
+  - Parameters: `which` (optional) - "active", "queued", or "all" (default: "active")
+  - Returns: PNG images of job tables and status charts, plus markdown summary
+
+- **`start_job`**: Start execution of a specific job
+  - Parameters: `job_id` (required), `priority` (optional, 1-10, default: 5)
+  - Returns: Job status and queue information
+
+- **`stop_job`**: Stop a running job
+  - Parameters: `job_id` (required), `force` (optional, default: false)
+  - Returns: Job cancellation status
+
+#### System Monitoring
+- **`health_check`**: Perform a comprehensive health check on the runner
+  - Parameters: `detailed` (optional, default: false)
+  - Returns: Runner status, active jobs count, queue size, health score
+
+- **`weather_dashboard`**: Get a comprehensive dashboard of job health and system health
+  - Parameters: `timeframe` (optional) - "1h", "6h", "24h", "7d" (default: "24h")
+  - Returns: Job health metrics, system health, success rates
+
+#### Analytics and Visualization
+- **`analytics`**: Get sparkline and cycle time analytics with PNG charts
+  - Parameters: `metric` (optional) - "duration", "throughput", "error_rate" (default: "duration")
+  - Returns: Analytics data with embedded PNG sparkline charts
+
+- **`dependency_graph`**: Generate dependency graph visualization for jobs and workflows
+  - Parameters: `format` (optional) - "json", "dot", "mermaid", "svg" (default: "json")
+  - Returns: Graph data with optional SVG visualization
+
+#### Alerts and Notifications
+- **`alerts`**: Get alerts for failing jobs, stuck jobs, and degraded service
+  - Parameters: `severity` (optional) - "low", "medium", "high" (default: "medium")
+  - Returns: Alert list with severity levels and timestamps
+
+#### Historical Data
+- **`job_history`**: List recent job runs and their status
+  - Parameters: None
+  - Returns: Historical job data, success rates, average durations
+
+- **`job_logs`**: Get logs or differential logs for a given job
+  - Parameters: `job_name` (required)
+  - Returns: Job logs and differential log data
+
+### Quick Start with Cursor
+
+1. **Start the MCP server:**
+   ```bash
+   barefoot mcp --transport stdio
+   ```
+
+2. **Configure Cursor:**
+   - Open Cursor Settings
+   - Go to `Extensions > MCP`
+   - Add server with command: `barefoot` and args: `["mcp", "--transport", "stdio"]`
+
+3. **Use AI commands:**
+   ```
+   "What's the health of my CI runner?"
+   "Show me the current jobs"
+   "Start a new job with high priority"
+   "Generate a dependency graph for my workflows"
+   "Show me analytics for the last 24 hours"
+   ```
+
+### MCP Transport Options
+
+The MCP server supports multiple transport protocols:
+
+```bash
+# Standard I/O (recommended for Cursor)
+barefoot mcp --transport stdio
+
+# HTTP server
+barefoot mcp --transport http --host 127.0.0.1 --port 8080
+
+# TCP server
+barefoot mcp --transport tcp --host 127.0.0.1 --port 8080
+
+# WebSocket server
+barefoot mcp --transport websocket --host 127.0.0.1 --port 8080
+```
+
+### Example MCP Usage
+
+#### List Current Jobs
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "call_tool",
+  "params": {
+    "name": "list_jobs",
+    "arguments": {
+      "which": "all"
+    }
+  }
+}
+```
+
+#### Check Runner Health
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "call_tool",
+  "params": {
+    "name": "health_check",
+    "arguments": {
+      "detailed": true
+    }
+  }
+}
+```
+
+#### Get Analytics
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "call_tool",
+  "params": {
+    "name": "analytics",
+    "arguments": {
+      "metric": "duration",
+      "timeframe": "hours",
+      "aggregation": "avg"
+    }
+  }
+}
+```
+
+### MCP Resources
+
+The MCP server also provides resources for real-time data:
+
+- **`barefoot://health`**: Real-time runner health status
+- **`barefoot://jobs/active`**: Currently active jobs
+- **`barefoot://jobs/history`**: Historical job data
+
+### Documentation
+
+- **[Quick Start Guide](docs/mcp-cursor-quickstart.md)** - Get started in 5 minutes
+- **[Full Integration Guide](docs/mcp-cursor-integration.md)** - Complete documentation
+- **[MCP Status](docs/mcp-status.md)** - Implementation status and roadmap
 
 ## Architecture
 

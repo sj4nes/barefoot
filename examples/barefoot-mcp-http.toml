@@ -1,0 +1,13 @@
+# Barefoot MCP Server Configuration for Cursor
+# Save this as ~/.cursor/mcp_servers/barefoot.toml
+
+[[mcpServers]]
+command = "http://127.0.0.1:8080/mcp"
+args = []
+env = {}
+
+# Optional: Add server metadata
+[mcpServers.metadata]
+name = "barefoot-runner"
+description = "Barefoot MCP server for CI/CD and job management"
+version = "0.1.0" 
